@@ -1,0 +1,305 @@
+---
+title: Load Shapes
+description: Control how load increases over time with different load pattern shapes
+---
+
+## What are Load Shapes?
+
+Load shapes define how the number of simulated users changes over the duration of a test. Instead of maintaining a constant number of users, you can use load shapes to simulate realistic traffic patterns like gradual ramp-ups, stepped increases, or sudden spikes.
+
+## Available Shapes
+
+Chainbench includes several built-in load shapes:
+
+- **ramp-up** (default): Linear increase to target users, then constant
+- **step**: Increases in discrete steps
+- **spike**: Spikes to full load and back down
+
+List all available shapes:
+
+```bash
+chainbench list shapes
+```
+
+## Default Shape: Ramp-Up
+
+When no shape is specified, Chainbench uses the default ramp-up pattern:
+
+1. Users spawn at the specified `--spawn-rate`
+2. Load increases linearly until `--users` is reached
+3. Maintains that user count until test duration expires
+
+```bash
+chainbench start --profile evm.light \
+  --users 100 \
+  --spawn-rate 10 \
+  --test-time 1h \
+  --target https://node-url
+```
+
+<Info>
+With 100 users and spawn rate 10, users will ramp up over 10 seconds (10 users/second), then maintain 100 users for the remaining test time.
+</Info>
+
+## Step Shape
+
+The step shape increases load in discrete steps, useful for testing how the system responds to incremental load increases.
+
+### How It Works
+
+- Number of steps = `--users` ÷ `--spawn-rate`
+- Duration per step = `--test-time` ÷ number of steps
+- Each step adds `--spawn-rate` users
+
+### Example
+
+```bash
+chainbench start --profile evm.light \
+  --shape step \
+  --users 100 \
+  --spawn-rate 20 \
+  --test-time 30m \
+  --target https://node-url \
+  --headless
+```
+
+**Result:**
+- 5 steps (100 ÷ 20)
+- Each step lasts 6 minutes (30m ÷ 5)
+- Users: 20 → 40 → 60 → 80 → 100
+
+<Accordion title="Step Shape Implementation">
+
+```python
+from locust import LoadTestShape
+import math
+
+class StepLoadShape(LoadTestShape):
+    """
+    Determines the number of steps by dividing total users by spawn rate.
+    Duration of each step is calculated by dividing total run time by
+    the number of steps equally.
+    """
+
+    use_common_options = True
+
+    def tick(self):
+        run_time = self.get_run_time()
+        total_run_time = self.runner.environment.parsed_options.run_time
+
+        if run_time < total_run_time:
+            step = self.runner.environment.parsed_options.spawn_rate
+            users = self.runner.environment.parsed_options.num_users
+            no_of_steps = round(users / step)
+            step_time = total_run_time / no_of_steps
+            user_count = min(step * math.ceil(run_time / step_time), users)
+            return user_count, step
+        return None
+```
+
+</Accordion>
+
+## Spike Shape
+
+The spike shape simulates sudden traffic bursts, useful for testing system resilience under spike conditions.
+
+### Pattern
+
+1. **40% of duration**: 10% of target users (baseline)
+2. **20% of duration**: 100% of target users (spike)
+3. **40% of duration**: 10% of target users (recovery)
+
+### Example
+
+```bash
+chainbench start --profile evm.light \
+  --shape spike \
+  --users 1000 \
+  --spawn-rate 50 \
+  --test-time 10m \
+  --target https://node-url \
+  --headless
+```
+
+**Timeline:**
+- **0:00 - 4:00** (40%): 100 users (10% of 1000)
+- **4:00 - 6:00** (20%): 1000 users (spike)
+- **6:00 - 10:00** (40%): 100 users (recovery)
+
+<Accordion title="Spike Shape Implementation">
+
+```python
+from locust import LoadTestShape
+
+class SpikeLoadShape(LoadTestShape):
+    """
+    A step load shape that spikes to full load:
+    - 10% of users for 40% of test duration
+    - 100% of users for 20% of test duration  
+    - 10% of users until end of test duration
+    """
+
+    use_common_options = True
+
+    def tick(self):
+        run_time = self.get_run_time()
+        total_run_time = self.runner.environment.parsed_options.run_time
+        period_duration = round(total_run_time / 10)
+        spike_run_time_start = period_duration * 4
+        spike_run_time_end = period_duration * 6
+
+        if run_time < spike_run_time_start:
+            user_count = round(self.runner.environment.parsed_options.num_users / 10)
+            return user_count, self.runner.environment.parsed_options.spawn_rate
+        elif run_time < spike_run_time_end:
+            return self.runner.environment.parsed_options.num_users, self.runner.environment.parsed_options.spawn_rate
+        elif run_time < total_run_time:
+            user_count = round(self.runner.environment.parsed_options.num_users / 10)
+            return user_count, self.runner.environment.parsed_options.spawn_rate
+        return None
+```
+
+</Accordion>
+
+<Tip>
+Use spike patterns to test if your node can handle sudden traffic increases and how quickly it recovers to normal performance.
+</Tip>
+
+## Use Cases by Shape
+
+### Ramp-Up (Default)
+
+**Best for:**
+- Steady-state performance testing
+- Finding maximum sustained throughput
+- Long-duration stability tests
+- General benchmarking
+
+**Example:**
+```bash
+chainbench start --profile evm.light \
+  --users 200 \
+  --test-time 2h \
+  --target https://node-url
+```
+
+### Step
+
+**Best for:**
+- Identifying performance degradation points
+- Finding breaking points
+- Testing scaling behavior
+- Observing gradual performance changes
+
+**Example:**
+```bash
+chainbench start --profile evm.light \
+  --shape step \
+  --users 500 \
+  --spawn-rate 50 \
+  --test-time 1h \
+  --target https://node-url
+```
+
+### Spike
+
+**Best for:**
+- Testing resilience to traffic bursts
+- Evaluating recovery time
+- Stress testing
+- Simulating real-world traffic patterns
+
+**Example:**
+```bash
+chainbench start --profile bsc.general \
+  --shape spike \
+  --users 2000 \
+  --test-time 30m \
+  --target https://node-url
+```
+
+## Creating Custom Shapes
+
+You can create custom load shapes by copying an existing shape and modifying it:
+
+1. Copy a shape from `chainbench/shapes/`
+2. Modify the `tick()` method to define your pattern
+3. Save to your custom shapes directory
+4. Use with `--shape custom-shape-name`
+
+<Note>
+Custom shapes must inherit from `LoadTestShape` and implement the `tick()` method which returns `(user_count, spawn_rate)` or `None` when the test should end.
+</Note>
+
+### Custom Shape Example
+
+```python
+from locust import LoadTestShape
+
+class WaveLoadShape(LoadTestShape):
+    """
+    Alternates between high and low load in waves.
+    """
+    use_common_options = True
+
+    def tick(self):
+        run_time = self.get_run_time()
+        total_run_time = self.runner.environment.parsed_options.run_time
+        
+        if run_time < total_run_time:
+            max_users = self.runner.environment.parsed_options.num_users
+            spawn_rate = self.runner.environment.parsed_options.spawn_rate
+            
+            # Create waves: high for 5 min, low for 5 min
+            cycle_time = run_time % 600  # 10 min cycles
+            if cycle_time < 300:  # First 5 minutes
+                user_count = max_users
+            else:  # Next 5 minutes
+                user_count = max_users // 4
+                
+            return user_count, spawn_rate
+        return None
+```
+
+## Combining Shapes with Profiles
+
+Different load shapes work well with different profile types:
+
+**Light profiles** (`evm.light`):
+- Can handle high user counts
+- Good for all shape types
+- Use for maximum load testing
+
+**Heavy profiles** (`evm.heavy`):
+- Use lower user counts
+- Step shape helps identify limits
+- Spike shape tests resilience
+
+**Archive profiles**:
+- May need custom shapes for realistic patterns
+- Consider periodic access patterns
+
+```bash
+# Heavy profile with step increases
+chainbench start --profile evm.heavy \
+  --shape step \
+  --users 50 \
+  --spawn-rate 5 \
+  --test-time 1h \
+  --target https://archive-node
+```
+
+<Info>
+When using heavy profiles or expensive operations, start with lower user counts and shorter test times to avoid overwhelming your infrastructure.
+</Info>
+
+## Monitoring Shape Performance
+
+When using shapes, monitor:
+
+1. **Response times** at each load level
+2. **Error rates** during transitions
+3. **Resource usage** on the target node
+4. **Recovery time** after spike tests
+
+In headless mode, results are saved to CSV files for analysis.

@@ -1,0 +1,467 @@
+---
+title: "chainbench start"
+description: "Start a load test on blockchain infrastructure with customizable profiles, methods, and load patterns"
+---
+
+## Overview
+
+The `start` command initiates a load test on your specified blockchain endpoint. You can test individual RPC methods or use pre-configured profiles that combine multiple methods with realistic weight distributions.
+
+By default, results are saved to `./results/{profile_or_method_name}/{YYYY-mm-dd_HH-MM-SS}`.
+
+## Basic Usage
+
+<Tabs>
+  <Tab title="Test a Single Method">
+    ```bash
+    chainbench start eth_blockNumber \
+      --users 50 \
+      --workers 2 \
+      --test-time 12h \
+      --target https://node-url \
+      --headless \
+      --autoquit
+    ```
+    
+    Tests the `eth_blockNumber` method with 50 concurrent users over 12 hours.
+  </Tab>
+  
+  <Tab title="Test with a Profile">
+    ```bash
+    chainbench start \
+      --profile bsc.general \
+      --users 50 \
+      --workers 2 \
+      --test-time 12h \
+      --target https://node-url \
+      --headless \
+      --autoquit
+    ```
+    
+    Runs a general BSC profile with multiple weighted methods.
+  </Tab>
+  
+  <Tab title="Web UI Mode">
+    ```bash
+    chainbench start \
+      --profile bsc.general \
+      --workers 1 \
+      --target https://node-url
+    ```
+    
+    Starts a web server on port 8089 for interactive testing. Target is required for test data initialization.
+  </Tab>
+</Tabs>
+
+## Arguments
+
+<ParamField path="method" type="string" optional>
+  Specify a single RPC method to test (e.g., `eth_blockNumber`, `eth_getBalance`). When provided, profile options are ignored.
+  
+  Use `chainbench list methods` to see all available methods.
+</ParamField>
+
+## Core Options
+
+<ParamField path="--target" type="string" required>
+  The blockchain node endpoint URL to test.
+  
+  ```bash
+  --target https://eth-mainnet.example.com
+  ```
+  
+  <Note>
+    Required for test data initialization. In Web UI mode, you can change the target later, but test data must be compatible with the same chain type.
+  </Note>
+</ParamField>
+
+<ParamField path="-u, --users" type="integer" default="100">
+  Target number of concurrent simulated users.
+  
+  ```bash
+  --users 50
+  ```
+</ParamField>
+
+<ParamField path="-r, --spawn-rate" type="integer" default="10">
+  Number of users spawned per second during ramp-up.
+  
+  ```bash
+  --spawn-rate 5
+  ```
+</ParamField>
+
+<ParamField path="-w, --workers" type="integer" default="8">
+  Number of worker processes to distribute the load.
+  
+  ```bash
+  --workers 4
+  ```
+</ParamField>
+
+<ParamField path="-t, --test-time" type="string" default="5m">
+  Duration of the test. Supports time units: `s` (seconds), `m` (minutes), `h` (hours).
+  
+  ```bash
+  --test-time 30m
+  --test-time 2h
+  --test-time 300s
+  ```
+</ParamField>
+
+## Profile Options
+
+<ParamField path="-p, --profile" type="string" optional>
+  Name of the profile to run. Available profiles can be listed with `chainbench list profiles`.
+  
+  ```bash
+  --profile ethereum.general
+  --profile evm.light
+  ```
+  
+  Supports one level of nesting using dot notation (e.g., `bsc.general` → `profile/bsc/general.py`).
+</ParamField>
+
+<ParamField path="-d, --profile-dir" type="path" optional>
+  Custom directory containing profiles. Supports up to one level of subdirectories.
+  
+  ```bash
+  --profile-dir /path/to/custom/profiles
+  ```
+</ParamField>
+
+<ParamField path="--profile-path" type="path" optional>
+  Full path to a specific profile locustfile. Overrides `--profile` and `--profile-dir`.
+  
+  ```bash
+  --profile-path /path/to/my-custom-profile.py
+  ```
+</ParamField>
+
+## Load Pattern Options
+
+<ParamField path="-s, --shape" type="string" optional>
+  Shape of the load pattern. Available shapes: `step`, `spike`, or custom shapes.
+  
+  ```bash
+  --shape step
+  --shape spike
+  ```
+  
+  Default is ramp-up: load increases linearly at spawn-rate until target users is reached.
+  
+  Use `chainbench list shapes` to see all available shapes.
+</ParamField>
+
+## Test Data Options
+
+<ParamField path="--size" type="string" optional>
+  Size of test data to generate. Larger sizes result in longer generation time.
+  
+  | Size | Blocks |
+  |------|--------|
+  | XS   | 10     |
+  | S    | 100    |
+  | M    | 1,000  |
+  | L    | 10,000 |
+  | XL   | 100,000|
+  
+  ```bash
+  --size M
+  ```
+</ParamField>
+
+<ParamField path="--use-latest-blocks" type="flag">
+  Use the latest blocks for test data and run a background process to keep data updated.
+  
+  Recommended for nodes with limited history (e.g., sync modes that only keep the last 128 blocks).
+  
+  ```bash
+  --use-latest-blocks --size S
+  ```
+</ParamField>
+
+<ParamField path="--ref-url" type="string" optional>
+  Reference node URL for retrieving test data before the test starts. If not specified, target URL is used.
+  
+  ```bash
+  --ref-url https://reference-node.example.com
+  ```
+</ParamField>
+
+<ParamField path="--start-block" type="integer" optional>
+  Starting block number for custom block range. Must be used with `--end-block`.
+  
+  ```bash
+  --start-block 18000000 --end-block 18000100
+  ```
+  
+  <Note>
+    Ignored if `--use-latest-blocks` is set.
+  </Note>
+</ParamField>
+
+<ParamField path="--end-block" type="integer" optional>
+  Ending block number for custom block range. Must be greater than `--start-block`.
+</ParamField>
+
+## Execution Mode Options
+
+<ParamField path="--headless" type="flag">
+  Run in headless mode without the web UI.
+  
+  ```bash
+  --headless
+  ```
+  
+  Useful for automated testing and remote server execution.
+</ParamField>
+
+<ParamField path="--autoquit" type="flag">
+  Automatically quit after the test finishes.
+  
+  ```bash
+  --autoquit
+  ```
+  
+  Recommended for automated testing pipelines.
+</ParamField>
+
+<ParamField path="-H, --host" type="string" default="127.0.0.1">
+  Host address for the Locust master.
+  
+  ```bash
+  --host 0.0.0.0
+  ```
+</ParamField>
+
+<ParamField path="-P, --port" type="string" default="5557">
+  Port for the Locust master.
+  
+  ```bash
+  --port 8089
+  ```
+</ParamField>
+
+## Batch Request Options
+
+<ParamField path="--batch" type="flag">
+  Send requests in batches for JSON-RPC methods.
+  
+  ```bash
+  --batch --batch-size 20
+  ```
+</ParamField>
+
+<ParamField path="--batch-size" type="integer" default="10">
+  Number of requests per batch. Only used when `--batch` is set.
+  
+  ```bash
+  --batch-size 15
+  ```
+</ParamField>
+
+## Method Filtering Options
+
+<ParamField path="--debug-trace-methods" type="flag">
+  Enable execution of tasks tagged with `debug` or `trace`.
+  
+  ```bash
+  --debug-trace-methods
+  ```
+  
+  By default, debug and trace methods are excluded.
+</ParamField>
+
+<ParamField path="-E, --exclude-tags" type="string" multiple>
+  Exclude tasks with specific tags. Can be specified multiple times.
+  
+  ```bash
+  -E slow -E experimental
+  ```
+</ParamField>
+
+## Monitoring Options
+
+<ParamField path="-m, --monitor" type="choice" multiple>
+  Add monitors to collect additional metrics during the test. Can be specified multiple times.
+  
+  Available monitors:
+  - `sync-lag-monitor` - Track node synchronization lag
+  
+  ```bash
+  -m sync-lag-monitor
+  ```
+  
+  <Note>
+    Monitors currently only work in headless mode.
+  </Note>
+</ParamField>
+
+<ParamField path="--notify" type="string" optional>
+  Send notifications when the test starts and finishes using ntfy.sh.
+  
+  ```bash
+  --notify my-test-topic
+  ```
+  
+  Notifications will be sent to `https://ntfy.sh/my-test-topic`.
+</ParamField>
+
+## Results Options
+
+<ParamField path="--results-dir" type="path" default="results">
+  Directory where test results are saved.
+  
+  ```bash
+  --results-dir /path/to/results
+  ```
+</ParamField>
+
+<ParamField path="--run-id" type="string" optional>
+  Custom identifier for the test run.
+  
+  ```bash
+  --run-id prod-stress-test-001
+  ```
+</ParamField>
+
+## Database Export Options
+
+<ParamField path="--timescale" type="flag">
+  Export test data to PostgreSQL with TimescaleDB extension.
+  
+  Requires all PG connection parameters.
+  
+  ```bash
+  --timescale \
+    --pg-host localhost \
+    --pg-port 5432 \
+    --pg-username postgres \
+    --pg-password secret
+  ```
+</ParamField>
+
+<ParamField path="--pg-host" type="string" optional>
+  Hostname of PostgreSQL instance with TimescaleDB.
+</ParamField>
+
+<ParamField path="--pg-port" type="integer" default="5432">
+  Port of PostgreSQL instance.
+</ParamField>
+
+<ParamField path="--pg-username" type="string" default="postgres">
+  PostgreSQL username.
+</ParamField>
+
+<ParamField path="--pg-password" type="string" optional>
+  PostgreSQL password.
+</ParamField>
+
+## Logging Options
+
+<ParamField path="--log-level" type="string" default="INFO">
+  Logging level for test output.
+  
+  ```bash
+  --log-level DEBUG
+  ```
+</ParamField>
+
+## Common Scenarios
+
+### Quick Development Test
+
+```bash
+chainbench start eth_blockNumber \
+  --users 5 \
+  --workers 1 \
+  --test-time 30s \
+  --target https://node-url \
+  --headless \
+  --autoquit
+```
+
+### Production Stress Test
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --users 100 \
+  --workers 8 \
+  --test-time 6h \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --size L \
+  -m sync-lag-monitor
+```
+
+### Limited History Node Test
+
+```bash
+chainbench start \
+  --profile evm.light \
+  --users 50 \
+  --workers 4 \
+  --test-time 1h \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --use-latest-blocks \
+  --size S
+```
+
+### Batch Request Test
+
+```bash
+chainbench start eth_getBlockByNumber \
+  --users 20 \
+  --workers 2 \
+  --test-time 15m \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --batch \
+  --batch-size 25
+```
+
+### Remote Server Test with nohup
+
+```bash
+nohup chainbench start \
+  --profile bsc.general \
+  --workers 4 \
+  --users 100 \
+  --test-time 24h \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --notify bsc-test-alerts &
+```
+
+## Example Output
+
+```bash
+$ chainbench start eth_blockNumber --users 10 --workers 1 --test-time 1m \
+    --target https://eth-node.example.com --headless --autoquit
+
+Testing target endpoint: https://eth-node.example.com
+Testing method: eth_blockNumber
+Results will be saved to /home/user/results/eth_blockNumber/2026-03-04_10-30-15
+Starting master in headless mode
+Starting worker 1
+
+Running test in headless mode
+
+[2026-03-04 10:30:16,123] INFO/locust.main: Starting Locust 2.x.x
+[2026-03-04 10:30:16,456] INFO/locust.main: Run time limit set to 60 seconds
+[2026-03-04 10:31:16,789] INFO/locust.main: Time limit reached. Stopping Locust.
+
+Quitting...
+```
+
+## Related Commands
+
+- [chainbench list](/commands/list) - View all available methods, profiles, and shapes
+- [chainbench discover](/commands/discover) - Discover available methods on an endpoint

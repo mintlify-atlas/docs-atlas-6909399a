@@ -1,0 +1,216 @@
+---
+title: Profiles
+description: Learn how to create and use benchmark profiles in Chainbench
+---
+
+## What are Profiles?
+
+A profile is a collection of tasks that are executed during the benchmark. Each profile is a Python class that inherits from the `BaseUser` class (or protocol-specific user classes like `EvmUser` or `SolanaUser`) and defines the RPC methods to call during the load test.
+
+Profiles allow you to simulate realistic workloads by defining which blockchain RPC methods to call, how frequently to call them, and with what parameters.
+
+## Built-in Profiles
+
+Chainbench includes profiles for many popular blockchains:
+
+- **Ethereum**: `ethereum.general`, `ethereum.consensus`, `ethereum.subscriptions`
+- **EVM chains**: `evm.light`, `evm.heavy`, `evm.get_logs`, `evm.debug_trace`
+- **BNB Smart Chain**: `bsc.general`
+- **Polygon**: `polygon.general`
+- **Avalanche**: `avalanche.general`, `avalanche.archive`
+- **Base**: `base.general`, `base.archive`
+- **Arbitrum**: `arbitrum.general`, `arbitrum.archive`
+- **Optimism**: `optimism.general`, `optimism.archive`
+- **Solana**: `solana.general`, `solana.all`
+- **And many more**
+
+You can list all available profiles using:
+
+```bash
+chainbench list profiles
+```
+
+## Profile Structure
+
+A basic profile consists of:
+
+1. **User class** - Inherits from a protocol-specific base class
+2. **Wait time** - Defines pacing between requests
+3. **Tasks/RPC calls** - Methods to execute with optional weights
+
+### Simple Profile Example
+
+Here's the `evm.light` profile which tests common read operations:
+
+```python
+from locust import constant_pacing
+from chainbench.user import EvmUser
+
+class EvmLightProfile(EvmUser):
+    wait_time = constant_pacing(1)
+
+    rpc_calls = {
+        EvmUser.eth_get_transaction_receipt: 1,
+        EvmUser.eth_block_number: 1,
+        EvmUser.eth_get_balance: 1,
+        EvmUser.eth_chain_id: 1,
+        EvmUser.eth_get_block_by_number: 1,
+        EvmUser.eth_get_transaction_by_hash: 1,
+        EvmUser.web3_client_version: 1,
+    }
+
+    tasks = EvmUser.expand_tasks(rpc_calls)
+```
+
+## Task Weights
+
+Weights determine how frequently each task is executed relative to others. Higher weights mean more frequent execution.
+
+<Accordion title="Weighted Profile Example">
+
+The `bsc.general` profile uses weights based on real-world usage patterns:
+
+```python
+from locust import constant_pacing
+from chainbench.user import EvmUser
+
+class BscProfile(EvmUser):
+    wait_time = constant_pacing(1)
+    rpc_calls = {
+        EvmUser.eth_call: 33,                    # Most frequent
+        EvmUser.eth_get_transaction_receipt: 31,
+        EvmUser.eth_get_logs: 12,
+        EvmUser.eth_block_number: 9,
+        EvmUser.eth_chain_id: 6,
+        EvmUser.eth_get_block_by_number: 4,
+        EvmUser.eth_get_transaction_by_hash: 3,
+        EvmUser.eth_get_balance: 2,
+        EvmUser.eth_get_block_by_hash: 1,        # Least frequent
+    }
+
+    tasks = EvmUser.expand_tasks(rpc_calls)
+```
+
+In this example, `eth_call` will be executed 33 times more frequently than `eth_get_block_by_hash`.
+
+</Accordion>
+
+## Wait Times
+
+Wait time controls the pacing between requests. Chainbench uses Locust's wait time functions:
+
+### constant_pacing
+
+Maintains a constant request rate by adjusting wait time based on response time:
+
+```python
+from locust import constant_pacing
+
+class MyProfile(EvmUser):
+    wait_time = constant_pacing(1)  # 1 request per second per user
+```
+
+<Info>
+With `constant_pacing(1)`, the wait time is calculated as `1 - response_time`. If the response takes longer than 1 second, the next request is sent immediately.
+</Info>
+
+### Other Wait Time Options
+
+Locust supports other wait time strategies:
+
+- `constant(seconds)` - Fixed wait time between requests
+- `between(min, max)` - Random wait time between min and max
+- Custom functions for advanced control
+
+See the [Locust documentation](https://docs.locust.io/en/stable/writing-a-locustfile.html#wait-time-attribute) for more options.
+
+## Custom Profiles
+
+<Note>
+For detailed instructions on creating custom profiles, see the [Creating Custom Profiles](/guides/custom-profiles) guide.
+</Note>
+
+You can create custom profiles by:
+
+1. Creating a Python file in your profiles directory
+2. Defining a class that inherits from `EvmUser`, `SolanaUser`, or `BaseUser`
+3. Adding tasks with the `@task` decorator or using the `rpc_calls` dictionary
+4. Using parameter factories for dynamic test data
+
+### Task-based Profile Example
+
+Here's an example using the `@task` decorator:
+
+```python
+from locust import task, constant_pacing
+from chainbench.user import EvmUser
+from chainbench.util.rng import get_rng
+
+class OasisProfile(EvmUser):
+    wait_time = constant_pacing(1)
+
+    @task
+    def get_block_by_number_task(self):
+        self.make_rpc_call(
+            name="get_block_by_number",
+            method="eth_getBlockByNumber",
+            params=self._block_params_factory(),
+        )
+
+    @task
+    def get_balance_task(self):
+        self.make_rpc_call(
+            name="get_balance",
+            method="eth_getBalance",
+            params=self._get_balance_params_factory(get_rng()),
+        )
+
+    @task
+    def get_syncing_task(self):
+        self.make_rpc_call(
+            name="get_syncing",
+            method="eth_syncing",
+        )
+```
+
+## Running Profiles
+
+To run a benchmark with a specific profile:
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://your-node-url \
+  --headless \
+  --autoquit
+```
+
+<Tip>
+Start with light profiles like `evm.light` before moving to heavier profiles like `evm.heavy` which include expensive operations like debug traces.
+</Tip>
+
+## Profile Location
+
+Default profiles are located in the `chainbench/profile` directory, organized by blockchain:
+
+```
+chainbench/profile/
+├── evm/
+│   ├── light.py
+│   ├── heavy.py
+│   └── ...
+├── bsc/
+│   └── general.py
+├── ethereum/
+│   ├── general.py
+│   └── consensus.py
+└── ...
+```
+
+You can specify a custom profile directory using:
+
+```bash
+chainbench start --profile-dir /path/to/profiles --profile my-profile ...
+```

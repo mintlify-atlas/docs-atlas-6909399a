@@ -1,0 +1,394 @@
+---
+title: Load Profiles
+description: Understanding and creating load test profiles in Chainbench
+---
+
+## Overview
+
+Profiles define which blockchain methods to test and their relative weights in a load test. Chainbench comes with built-in profiles for multiple blockchains and supports custom profile creation.
+
+## Built-in Profiles
+
+Chainbench includes pre-configured profiles for various blockchain networks:
+
+- **Ethereum**: `ethereum.general`, `evm.light`, `evm.heavy`
+- **Binance Smart Chain**: `bsc.general`
+- **Polygon**: `polygon.general`
+- **Solana**: `solana.general`
+- **Other EVM chains**: `base`, `arbitrum`, `avalanche`, `fantom`, `gnosis`, `oasis`, `optimism`, `ronin`
+- **Starknet**: Partial support available
+
+### Listing Available Profiles
+
+To see all available profiles:
+
+```bash
+chainbench list profiles
+```
+
+To list profiles from a custom directory:
+
+```bash
+chainbench list profiles -d /path/to/custom/profiles
+```
+
+## Profile Directory Structure
+
+Profiles are Python files (locustfiles) organized in a directory structure. Chainbench supports up to one level of subdirectories.
+
+### Default Profile Location
+
+The default profile directory is:
+
+```
+chainbench/profile/
+├── ethereum/
+│   └── general.py
+├── bsc/
+│   └── general.py
+├── polygon/
+│   └── general.py
+├── evm/
+│   ├── light.py
+│   └── heavy.py
+└── solana/
+    └── general.py
+```
+
+### Profile Naming Convention
+
+Profiles use dot notation to reference subdirectories:
+
+- `ethereum.general` → `profile/ethereum/general.py`
+- `evm.light` → `profile/evm/light.py`
+- `bsc.general` → `profile/bsc/general.py`
+
+Profiles in the root directory use simple names:
+
+- `myprofile` → `profile/myprofile.py`
+
+## Using Profiles
+
+### With the --profile Flag
+
+Specify a profile by name:
+
+```bash
+chainbench start --profile ethereum.general \
+  --users 100 \
+  --workers 4 \
+  --test-time 1h \
+  --target https://eth-node \
+  --headless
+```
+
+### With Custom Profile Directory
+
+Use the `-d` or `--profile-dir` flag to specify a custom directory:
+
+```bash
+chainbench start --profile-dir /path/to/profiles \
+  --profile custom.profile \
+  --users 50 \
+  --target https://node-url \
+  --headless
+```
+
+This will use `/path/to/profiles/custom/profile.py`.
+
+### With Direct Profile Path
+
+Use `--profile-path` to specify the exact file path:
+
+```bash
+chainbench start --profile-path /absolute/path/to/my-profile.py \
+  --users 100 \
+  --target https://node-url \
+  --headless
+```
+
+<Note>
+The `--profile-path` flag overrides both `--profile` and `--profile-dir` options.
+</Note>
+
+## Profile Discovery
+
+### How Profiles Are Found
+
+1. **Default location**: If no directory is specified, Chainbench looks in the built-in `profile/` directory
+2. **Custom directory**: When using `--profile-dir`, Chainbench scans that directory and one level of subdirectories
+3. **Direct path**: When using `--profile-path`, the exact file is used
+
+### Profile Validation
+
+When you specify a profile, Chainbench validates:
+
+- The profile directory exists
+- The profile file exists at the expected path
+- The profile file is a valid locustfile
+
+<Note>
+If a profile cannot be found, Chainbench will display an error message with suggestions:
+```
+Profile my-profile could not be found in /path/to/profiles.
+Use 'chainbench list profiles -d /path/to/profiles' to list available profiles.
+```
+</Note>
+
+## Creating Custom Profiles
+
+Custom profiles are Python files that define Locust user classes with blockchain-specific tasks.
+
+### Profile Structure
+
+A basic profile contains:
+
+1. **Imports**: Required Chainbench and Locust classes
+2. **User class**: Inherits from `EvmUser` or `SolanaUser`
+3. **Tasks**: Methods decorated with `@task` that define RPC calls
+4. **Weights**: Optional task weights to control frequency
+
+### Example Profile
+
+```python
+from locust import task
+from chainbench.user import EvmUser
+
+class MyCustomProfile(EvmUser):
+    """Custom profile for testing specific Ethereum methods."""
+    
+    @task(10)  # Weight of 10 (called more frequently)
+    def eth_block_number(self):
+        self.eth_blockNumber()
+    
+    @task(5)   # Weight of 5
+    def eth_get_balance(self):
+        self.eth_getBalance()
+    
+    @task(3)   # Weight of 3
+    def eth_get_transaction_count(self):
+        self.eth_getTransactionCount()
+```
+
+### Organizing Custom Profiles
+
+Create a directory structure for your profiles:
+
+```bash
+mkdir -p /path/to/my-profiles/custom
+```
+
+Create a profile file:
+
+```bash
+touch /path/to/my-profiles/custom/mytest.py
+```
+
+Use it with Chainbench:
+
+```bash
+chainbench start --profile-dir /path/to/my-profiles \
+  --profile custom.mytest \
+  --users 50 \
+  --target https://node-url
+```
+
+## Profile vs Method Testing
+
+### Testing a Single Method
+
+You can test a single method without a profile:
+
+```bash
+chainbench start eth_blockNumber --users 50 --target https://eth-node --headless
+```
+
+<Note>
+When using the method argument, `--profile` and `--profile-dir` options are ignored.
+</Note>
+
+### Testing Multiple Methods (Profile)
+
+Profiles allow testing multiple methods with specific weights:
+
+```bash
+chainbench start --profile ethereum.general --users 100 --target https://eth-node
+```
+
+## Web UI Mode with Profiles
+
+### Class Picker Mode
+
+When running without specifying a profile or method, Chainbench enables class picker mode in the Web UI:
+
+```bash
+chainbench start --workers 1 --target https://eth-node --profile-dir chainbench/profile/evm
+```
+
+This allows you to:
+- Select which user classes to run
+- Choose multiple profiles interactively
+- Adjust user distribution in the UI
+
+<Note>
+All profiles in the directory must use the same test data type (e.g., all EVM or all Solana).
+</Note>
+
+### Mixed Test Data Types
+
+If you specify a directory with multiple test data types (e.g., both EVM and Solana profiles), you'll see an error:
+
+```
+Error occurred: Multiple test data types detected.
+Specifying a directory that contains load profiles with same test data type
+is required if --profile option or method argument is not utilized.
+```
+
+## Advanced Profile Features
+
+### Task Tags
+
+Profiles can use tags to categorize tasks:
+
+```python
+from locust import task, tag
+
+class AdvancedProfile(EvmUser):
+    @task
+    @tag('debug', 'slow')
+    def debug_trace_transaction(self):
+        self.debug_traceTransaction()
+    
+    @task
+    @tag('batch')
+    def batch_get_balance(self):
+        # Batch operation
+        pass
+```
+
+Exclude specific tags:
+
+```bash
+chainbench start --profile custom -E debug -E slow
+```
+
+Enable debug/trace methods:
+
+```bash
+chainbench start --profile custom --debug-trace-methods
+```
+
+### Test Data Types
+
+Profiles are associated with test data types:
+
+- **EvmUser**: For EVM-compatible chains (Ethereum, BSC, Polygon, etc.)
+- **SolanaUser**: For Solana blockchain
+- **StarknetUser**: For Starknet (partial support)
+
+Chainbench automatically detects the test data type from the user class.
+
+## Best Practices
+
+<Accordion title="Profile Organization">
+  - Group related profiles in subdirectories (e.g., `custom/light`, `custom/heavy`)
+  - Use descriptive names that indicate the profile purpose
+  - Keep one level of nesting for simplicity
+  - Document each profile with docstrings
+</Accordion>
+
+<Accordion title="Task Weights">
+  - Assign higher weights to methods called more frequently in production
+  - Start with realistic production distributions
+  - Adjust weights based on observed traffic patterns
+  - Consider using separate profiles for different scenarios (e.g., read-heavy vs. write-heavy)
+</Accordion>
+
+<Accordion title="Profile Testing">
+  - Test new profiles with small data sizes first (`--size XS`)
+  - Validate against test nodes before production
+  - Start with low user counts and gradually increase
+  - Monitor resource usage on both client and server
+</Accordion>
+
+<Accordion title="Profile Maintenance">
+  - Keep profiles updated with new blockchain methods
+  - Remove deprecated methods from older profiles
+  - Version control your custom profiles
+  - Share successful profiles with your team
+</Accordion>
+
+## Troubleshooting
+
+### Profile Not Found
+
+If you see a "profile not found" error:
+
+1. Verify the profile name is correct (use `chainbench list profiles`)
+2. Check that the file exists at the expected path
+3. Ensure the file has a `.py` extension
+4. Verify directory permissions
+
+### Multiple Test Data Types Error
+
+If testing a directory with mixed types:
+
+1. Specify a specific profile: `--profile evm.light`
+2. Use a directory with only one test data type
+3. Test a single method instead: `chainbench start eth_blockNumber`
+
+### Profile Loading Errors
+
+If a profile fails to load:
+
+1. Check Python syntax in the profile file
+2. Ensure all required imports are present
+3. Verify the user class inherits from the correct base class
+4. Check for missing task decorators
+
+## Examples
+
+### Using Built-in Profile
+
+```bash
+chainbench start --profile evm.light \
+  --users 100 \
+  --workers 4 \
+  --test-time 2h \
+  --target https://eth-node \
+  --headless \
+  --autoquit
+```
+
+### Using Custom Profile Directory
+
+```bash
+chainbench start --profile-dir /home/user/blockchain-profiles \
+  --profile production.mainnet \
+  --users 200 \
+  --workers 8 \
+  --test-time 6h \
+  --target https://mainnet-node \
+  --headless
+```
+
+### Using Direct Profile Path
+
+```bash
+chainbench start --profile-path /opt/profiles/experimental/new-test.py \
+  --users 50 \
+  --test-time 30m \
+  --target https://test-node \
+  --headless \
+  --autoquit
+```
+
+### Web UI with Class Picker
+
+```bash
+chainbench start --profile-dir chainbench/profile/evm \
+  --workers 2 \
+  --target https://eth-node
+```
+
+Then navigate to `http://localhost:8089` to select profiles interactively.

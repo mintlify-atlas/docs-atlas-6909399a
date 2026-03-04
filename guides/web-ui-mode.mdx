@@ -1,0 +1,237 @@
+---
+title: Web UI Mode
+description: Run interactive load tests using Chainbench's web interface for real-time monitoring and parameter adjustments
+---
+
+Web UI mode provides an interactive interface for running and monitoring load tests. It allows you to adjust parameters in real-time and visualize test results through charts and graphs.
+
+## Starting the Web UI
+
+Run Chainbench without the `--headless` flag to start the web interface:
+
+```bash
+chainbench start --profile bsc.general --workers 1 --target https://any-working-node-endpoint.com
+```
+
+The web UI will be available at `http://localhost:8089`.
+
+<Note>
+The `--target` parameter is required to initialize test data, but you can change the target endpoint later in the UI.
+</Note>
+
+## Accessing the Web Interface
+
+<Steps>
+  <Step title="Start Chainbench">
+    Launch the tool with your desired profile:
+    ```bash
+    chainbench start --profile ethereum.general --workers 2 --target https://node-url
+    ```
+  </Step>
+  
+  <Step title="Open your browser">
+    Navigate to `http://localhost:8089`
+  </Step>
+  
+  <Step title="Configure test parameters">
+    Set the number of users, spawn rate, and test duration in the web interface
+  </Step>
+  
+  <Step title="Start the test">
+    Click the "Start swarming" button to begin the load test
+  </Step>
+</Steps>
+
+## Changing the Port
+
+By default, the web UI runs on port 8089. You can customize this:
+
+```bash
+chainbench start --profile ethereum.general --workers 1 --target https://node-url --port 9000
+```
+
+Then access the UI at `http://localhost:9000`.
+
+## Adjustable Parameters in the UI
+
+Once the web UI is running, you can modify:
+
+### During Test Setup
+- **Number of users**: Total simulated users for the test
+- **Spawn rate**: How many users to spawn per second
+- **Test duration**: How long to run the test (e.g., `1h`, `30m`)
+- **Host/Target**: The endpoint to test
+
+### During Test Execution
+- **Add or remove users**: Dynamically adjust load
+- **Stop test**: Halt the test at any time
+- **View real-time statistics**: Request rates, response times, failures
+
+<Tip>
+You can change the target endpoint in the UI, but test data initialized with one blockchain (e.g., Ethereum) can only be used to test other nodes of the same blockchain.
+</Tip>
+
+## Selecting User Classes
+
+Start without specifying a profile to select which user classes (method groups) to use:
+
+```bash
+chainbench start --workers 1 --target https://any-working-node-endpoint.com --profile-dir chainbench/profile/evm
+```
+
+This loads all EVM profiles and allows you to select which ones to include in your test through the web UI.
+
+<Note>
+When using `--profile-dir` without a specific profile, all profiles in that directory will be available for selection in the UI.
+</Note>
+
+## Testing with Multiple Profiles
+
+Load multiple profile directories for comprehensive testing:
+
+```bash
+chainbench start --workers 2 --target https://node-url --profile-dir ./custom-profiles
+```
+
+In the UI, you can enable or disable specific user classes from different profiles.
+
+## Web UI Features
+
+### Real-Time Monitoring
+
+The web interface provides:
+- **Request statistics**: RPS (requests per second), total requests, failures
+- **Response time charts**: Min, max, median, 95th percentile
+- **Distribution graphs**: Response time distribution across all requests
+- **Failure tracking**: Error rates and exception details
+
+### Charts and Visualizations
+
+- **Total requests per second**: Shows overall throughput
+- **Response times**: Tracks latency over time
+- **Number of users**: Displays active users throughout the test
+
+### Download Results
+
+After the test completes, download:
+- Statistics CSV files
+- Exception logs
+- Summary reports
+
+## Testing Individual Methods
+
+You can start the UI to test a specific method:
+
+```bash
+chainbench start eth_blockNumber --workers 1 --target https://node-url
+```
+
+This initializes the UI with only the `eth_blockNumber` method, but you can still adjust users, spawn rate, and duration through the interface.
+
+## Changing Test Parameters Mid-Test
+
+<Warning>
+While you can add or remove users during a test, changing the target endpoint or test duration requires restarting the test.
+</Warning>
+
+### Scaling Up Users
+
+1. Enter a higher number in the "Number of users" field
+2. Click "Update" or press Enter
+3. New users will spawn at the configured spawn rate
+
+### Scaling Down Users
+
+1. Enter a lower number in the "Number of users" field
+2. Click "Update" or press Enter
+3. Excess users will stop gracefully
+
+## Web UI vs Headless Mode
+
+| Feature | Web UI Mode | Headless Mode |
+|---------|-------------|---------------|
+| Real-time visualization | ✓ | ✗ |
+| Adjust parameters live | ✓ | ✗ |
+| Automatic termination | ✗ | ✓ (with `--autoquit`) |
+| Remote server deployment | Limited | ✓ |
+| Monitors support | ✗ | ✓ |
+| Class picker | ✓ | ✗ |
+
+## Remote Access to Web UI
+
+To access the web UI from a remote server, use SSH port forwarding:
+
+```bash
+ssh -L 8089:localhost:8089 user@remote-server
+```
+
+Then start Chainbench on the remote server:
+
+```bash
+chainbench start --profile ethereum.general --workers 2 --target https://node-url
+```
+
+Access the UI locally at `http://localhost:8089`.
+
+<Tip>
+Alternatively, bind to a specific network interface:
+```bash
+chainbench start --profile ethereum.general --workers 2 --target https://node-url --host 0.0.0.0
+```
+Then access via `http://server-ip:8089`.
+</Tip>
+
+## Best Practices for Web UI Mode
+
+### Development and Testing
+
+```bash
+chainbench start --profile evm.light --workers 1 --target https://test-node --size XS
+```
+
+- Use small test data sizes (XS or S)
+- Start with a single worker
+- Test against development nodes first
+- Validate configuration before long runs
+
+### Interactive Analysis
+
+- Monitor response time charts for anomalies
+- Watch for sudden failure rate increases
+- Observe patterns in request distribution
+- Use the UI to find optimal user counts
+
+### Switching to Headless
+
+Once you've validated your test configuration in the UI, run production tests in headless mode:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 12h --target https://node-url --headless --autoquit
+```
+
+<Note>
+The web UI is perfect for experimentation and analysis, but use headless mode with `--autoquit` for automated, long-running tests.
+</Note>
+
+## Troubleshooting
+
+### Can't Access Web UI
+
+Check that:
+- The port (default 8089) isn't blocked by a firewall
+- No other service is using the same port
+- Chainbench started without errors
+
+### UI Shows No Data
+
+Ensure you've:
+- Started the test by clicking "Start swarming"
+- Specified valid target endpoint
+- Configured users and spawn rate
+
+### Test Data Initialization Failed
+
+Verify:
+- Target endpoint is accessible and responding
+- You have network connectivity
+- The endpoint supports the required RPC methods

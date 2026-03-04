@@ -1,0 +1,121 @@
+---
+title: Introduction
+description: A powerful blockchain infrastructure benchmarking and load testing CLI tool built on Locust
+---
+
+## What is Chainbench?
+
+Chainbench is a flexible blockchain infrastructure benchmarking tool that allows you to load test and analyze the performance of blockchain nodes and RPC endpoints. Built on top of [Locust](https://docs.locust.io/en/stable/index.html), it provides an intuitive CLI interface for testing any EVM-compatible blockchain, Solana, and partial support for Starknet.
+
+<Note>
+Chainbench is developed by [Chainstack](https://chainstack.com/), the leading suite of services connecting developers with Web3 infrastructure.
+</Note>
+
+## Key Features
+
+### Built-in Protocol Support
+Chainbench comes with pre-configured profiles for major blockchain networks:
+- **EVM-compatible chains**: Ethereum, Binance Smart Chain, Polygon, Base, Arbitrum, Avalanche, Fantom, Gnosis, Oasis, Optimism, and Ronin
+- **Non-EVM chains**: Solana and Starknet (partial support)
+- **Generic profiles**: `evm.light` and `evm.heavy` for any EVM-compatible chain
+
+### Dynamic Test Data Generation
+Instead of using hardcoded values, Chainbench fetches real blockchain data to use as test parameters:
+- Automatically retrieves block numbers, hashes, transactions, and addresses
+- Supports custom block ranges for test data
+- Option to use latest blocks for nodes with limited history
+- Configurable test data sizes (XS to XL)
+
+### Flexible Load Patterns
+Control how load is distributed over time:
+- **Ramp-up**: Linear increase to target user count
+- **Step**: Incremental load increases in defined steps  
+- **Spike**: Burst testing with sudden load spikes
+- Custom load shapes can be added
+
+### Multiple Testing Modes
+- **Headless mode**: Automated testing ideal for CI/CD pipelines
+- **Web UI mode**: Interactive dashboard for real-time monitoring and control
+- **Batch mode**: Send multiple requests in a single batch request
+- **Single method testing**: Focus on specific RPC methods
+
+### Custom Profile Creation
+Easily create custom profiles for specific testing scenarios:
+- Python-based profile definition
+- Built-in parameter factories for common RPC methods
+- Support for static and dynamic call parameters
+- Task weighting for realistic workload simulation
+
+## Use Cases
+
+### Infrastructure Performance Testing
+Benchmark your blockchain nodes to understand their capacity:
+```bash
+chainbench start --profile evm.light --users 100 --workers 4 \
+  --test-time 1h --target https://your-node-url --headless --autoquit
+```
+
+### RPC Endpoint Validation
+Discover which methods are available on an endpoint:
+```bash
+chainbench discover https://node-url --clients geth,erigon
+```
+
+### Sync Mode Testing
+Test nodes running in limited sync modes using latest blocks:
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 \
+  --test-time 1h --target https://node-url --use-latest-blocks --size S
+```
+
+### Load Testing with Monitoring
+Collect additional metrics like sync lag during tests:
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 \
+  --test-time 12h --target https://node-url --headless -m sync-lag-monitor
+```
+
+## Architecture Overview
+
+Chainbench is built on a distributed architecture leveraging Locust:
+
+### Master-Worker Model
+- **Master process**: Coordinates the test, collects metrics, and provides web UI
+- **Worker processes**: Generate load by simulating users making RPC calls
+- Scalable to multiple workers for high-load testing
+
+### Test Data Layer
+Before tests begin, Chainbench:
+1. Connects to the target (or reference) node
+2. Fetches the chain ID to determine the blockchain
+3. Retrieves test data based on configured size (blocks, transactions, addresses)
+4. Distributes this data to all workers for consistent testing
+
+### User Classes and Tasks
+Profiles define user classes that:
+- Inherit from base classes (`EvmUser`, `SolanaUser`)
+- Contain tasks decorated with `@task` representing RPC methods
+- Use parameter factories to generate realistic request data
+- Support task weighting for workload distribution
+
+### Results and Metrics
+Test results are saved to the `./results/` directory by default:
+- Request statistics (response times, failure rates)
+- Per-method performance metrics
+- CSV exports for further analysis
+- Optional TimescaleDB integration for time-series data
+
+<Warning>
+Always start with small load (few users) and short durations when testing production infrastructure to avoid overwhelming your nodes.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Get Chainbench installed with pip or Poetry
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first benchmark in minutes
+  </Card>
+</CardGroup>

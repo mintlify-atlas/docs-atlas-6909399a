@@ -1,0 +1,421 @@
+---
+title: CLI Parameters Reference
+description: Complete reference for all Chainbench CLI parameters and flags
+---
+
+## Overview
+
+This page provides a comprehensive reference for all CLI parameters and flags available in Chainbench's `start` command.
+
+## Usage
+
+```bash
+chainbench start [METHOD] [OPTIONS]
+```
+
+## Core Parameters
+
+### Target Configuration
+
+<ParamField path="--target" type="string" required>
+  The blockchain node endpoint URL to test against.
+  
+  ```bash
+  chainbench start --target https://eth-mainnet.example.com
+  ```
+  
+  <Note>Required for initializing test data. If running in Web UI mode, you can change it later, but it must match the blockchain type of the initialized test data.</Note>
+</ParamField>
+
+<ParamField path="--ref-url" type="string">
+  Reference node URL for retrieving test data before the test starts.
+  
+  If not specified, the target URL is used for test data generation.
+  
+  ```bash
+  chainbench start --target https://test-node --ref-url https://archive-node
+  ```
+</ParamField>
+
+### Profile Selection
+
+<ParamField path="method" type="string">
+  A specific RPC method to test (positional argument).
+  
+  ```bash
+  chainbench start eth_blockNumber --users 50 --workers 2
+  ```
+  
+  <Note>When using the method argument, `--profile` and `--profile-dir` options are ignored.</Note>
+  
+  Use `chainbench list methods` to see all available methods.
+</ParamField>
+
+<ParamField path="-p, --profile" type="string">
+  Profile to run. Profiles contain multiple methods with configured weights.
+  
+  ```bash
+  chainbench start --profile ethereum.general --target https://eth-node
+  ```
+  
+  Use `chainbench list profiles` to see all available profiles.
+</ParamField>
+
+<ParamField path="-d, --profile-dir" type="path">
+  Custom directory containing profiles. Supports up to one level of subdirectories.
+  
+  ```bash
+  chainbench start --profile-dir /path/to/profiles --profile custom.profile
+  ```
+</ParamField>
+
+<ParamField path="--profile-path" type="path">
+  Full path to a specific profile locustfile.
+  
+  This overrides both `--profile` and `--profile-dir` options.
+  
+  ```bash
+  chainbench start --profile-path /path/to/my-profile.py --target https://node
+  ```
+</ParamField>
+
+### Load Configuration
+
+<ParamField path="-u, --users" type="integer" default="100">
+  Target number of concurrent simulated users.
+  
+  ```bash
+  chainbench start --users 200 --profile evm.light
+  ```
+</ParamField>
+
+<ParamField path="-r, --spawn-rate" type="integer" default="10">
+  Number of users spawned per second during ramp-up.
+  
+  ```bash
+  chainbench start --users 100 --spawn-rate 5
+  ```
+</ParamField>
+
+<ParamField path="-w, --workers" type="integer" default="8">
+  Number of worker processes to run.
+  
+  More workers can generate higher load but consume more system resources.
+  
+  ```bash
+  chainbench start --workers 4 --profile bsc.general
+  ```
+</ParamField>
+
+<ParamField path="-t, --test-time" type="string" default="5m">
+  Duration of the test run. Accepts time formats like `30s`, `5m`, `2h`, `12h`.
+  
+  ```bash
+  chainbench start --test-time 1h --profile evm.light
+  ```
+</ParamField>
+
+<ParamField path="-s, --shape" type="string">
+  Load pattern shape to use. Controls how load is distributed over time.
+  
+  Available shapes: `step`, `spike`
+  
+  ```bash
+  chainbench start --shape step --users 100 --spawn-rate 10
+  ```
+  
+  Use `chainbench list shapes` to see all available shapes. See [Load Shapes](/configuration/load-shapes) for details.
+</ParamField>
+
+### Execution Mode
+
+<ParamField path="--headless" type="boolean" default="false">
+  Run in headless mode without the web UI.
+  
+  ```bash
+  chainbench start --headless --profile evm.light --target https://node
+  ```
+  
+  <Note>Required for running on remote servers or in automated environments.</Note>
+</ParamField>
+
+<ParamField path="--autoquit" type="boolean" default="false">
+  Automatically quit after the test completes.
+  
+  ```bash
+  chainbench start --headless --autoquit --test-time 1h
+  ```
+  
+  Useful for automated testing and CI/CD pipelines.
+</ParamField>
+
+### Network Configuration
+
+<ParamField path="-H, --host" type="string" default="127.0.0.1">
+  Host address for the Locust master process.
+  
+  ```bash
+  chainbench start --host 0.0.0.0 --port 8089
+  ```
+</ParamField>
+
+<ParamField path="-P, --port" type="string" default="5557">
+  Port for the Locust master process.
+  
+  ```bash
+  chainbench start --port 5558
+  ```
+</ParamField>
+
+### Test Data Configuration
+
+<ParamField path="--size" type="string" default="S">
+  Size of test data to generate. Determines how many blocks are used.
+  
+  Available values:
+  - `XS`: 10 blocks
+  - `S`: 100 blocks (default)
+  - `M`: 1,000 blocks
+  - `L`: 10,000 blocks
+  - `XL`: 100,000 blocks
+  
+  ```bash
+  chainbench start --size M --profile ethereum.general
+  ```
+  
+  <Note>Larger data sizes result in longer test data generation time before the test starts.</Note>
+</ParamField>
+
+<ParamField path="--use-latest-blocks" type="boolean" default="false">
+  Use the latest blocks for test data generation and continuously update test data.
+  
+  ```bash
+  chainbench start --use-latest-blocks --size S --target https://node
+  ```
+  
+  <Note>Recommended for nodes running in sync modes that don't have access to full blockchain history (e.g., nodes that only keep the last 128 blocks).</Note>
+</ParamField>
+
+<ParamField path="--start-block" type="integer">
+  Starting block number for generating test data.
+  
+  Must be used together with `--end-block`.
+  
+  ```bash
+  chainbench start --start-block 1000000 --end-block 1001000
+  ```
+  
+  <Note>Ignored if `--use-latest-blocks` is set.</Note>
+</ParamField>
+
+<ParamField path="--end-block" type="integer">
+  Ending block number for generating test data.
+  
+  Must be greater than `--start-block`.
+  
+  ```bash
+  chainbench start --start-block 1000000 --end-block 1001000
+  ```
+</ParamField>
+
+### Task Filtering
+
+<ParamField path="--debug-trace-methods" type="boolean" default="false">
+  Enable execution of tasks tagged with `debug` or `trace`.
+  
+  ```bash
+  chainbench start --debug-trace-methods --profile evm.heavy
+  ```
+  
+  By default, debug and trace methods are excluded from tests.
+</ParamField>
+
+<ParamField path="-E, --exclude-tags" type="string[]">
+  Exclude tasks with specific custom tags from the test.
+  
+  Can be specified multiple times for different tags.
+  
+  ```bash
+  chainbench start -E slow -E experimental --profile custom
+  ```
+</ParamField>
+
+### Batch Mode
+
+<ParamField path="--batch" type="boolean" default="false">
+  Run tests in batch mode for JSON-RPC methods.
+  
+  Makes requests in batches instead of individual calls.
+  
+  ```bash
+  chainbench start --batch --batch-size 20 --profile evm.light
+  ```
+</ParamField>
+
+<ParamField path="--batch-size" type="integer" default="10">
+  Number of requests per batch for JSON-RPC methods.
+  
+  Only used when `--batch` flag is set.
+  
+  ```bash
+  chainbench start --batch --batch-size 25
+  ```
+</ParamField>
+
+### Results and Logging
+
+<ParamField path="--results-dir" type="path" default="results">
+  Directory to save test results.
+  
+  Results are saved to `{results-dir}/{profile_or_method_name}/{timestamp}/`
+  
+  ```bash
+  chainbench start --results-dir /data/benchmarks --profile evm.light
+  ```
+</ParamField>
+
+<ParamField path="--run-id" type="string">
+  Custom identifier for the test run.
+  
+  When specified, results are saved to `{results-dir}/{run-id}/` instead of using a timestamp.
+  
+  ```bash
+  chainbench start --run-id experiment-001 --profile custom
+  ```
+</ParamField>
+
+<ParamField path="--log-level" type="string" default="INFO">
+  Logging level for test execution.
+  
+  Available values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+  
+  ```bash
+  chainbench start --log-level DEBUG --profile evm.light
+  ```
+</ParamField>
+
+### Monitoring
+
+<ParamField path="-m, --monitor" type="string[]">
+  Add monitors to collect additional data or metrics during the test.
+  
+  Can be specified multiple times for different monitors. Only works in headless mode.
+  
+  Available monitors:
+  - `sync-lag-monitor`: Tracks how much the node lags behind current time
+  
+  ```bash
+  chainbench start --headless -m sync-lag-monitor --profile evm.light
+  ```
+</ParamField>
+
+<ParamField path="--notify" type="string">
+  Topic name for ntfy.sh notifications when the test starts and finishes.
+  
+  ```bash
+  chainbench start --notify my-test-topic --headless --autoquit
+  ```
+  
+  Notifications are sent to `https://ntfy.sh/{topic}`
+</ParamField>
+
+### TimescaleDB Export
+
+<ParamField path="--timescale" type="boolean" default="false">
+  Export test data to PostgreSQL with TimescaleDB extension.
+  
+  Requires all PG connection parameters.
+  
+  ```bash
+  chainbench start --timescale --pg-host localhost --pg-port 5432 \
+    --pg-username postgres --pg-password secret
+  ```
+</ParamField>
+
+<ParamField path="--pg-host" type="string">
+  Hostname of PostgreSQL instance with TimescaleDB extension.
+  
+  Required when `--timescale` is enabled.
+</ParamField>
+
+<ParamField path="--pg-port" type="integer" default="5432">
+  Port of PostgreSQL instance with TimescaleDB extension.
+</ParamField>
+
+<ParamField path="--pg-username" type="string" default="postgres">
+  PostgreSQL username for authentication.
+</ParamField>
+
+<ParamField path="--pg-password" type="string">
+  PostgreSQL password for authentication.
+  
+  Required when `--timescale` is enabled.
+</ParamField>
+
+## Examples
+
+### Basic Test
+
+Run a simple test with default settings:
+
+```bash
+chainbench start eth_blockNumber --target https://eth-node --headless --autoquit
+```
+
+### Production-Like Load Test
+
+Run a comprehensive test with high load:
+
+```bash
+chainbench start --profile ethereum.general \
+  --users 500 \
+  --spawn-rate 50 \
+  --workers 8 \
+  --test-time 6h \
+  --target https://eth-mainnet-node \
+  --headless \
+  --autoquit \
+  --size L \
+  --results-dir /data/benchmarks \
+  -m sync-lag-monitor
+```
+
+### Custom Block Range
+
+Test with a specific block range:
+
+```bash
+chainbench start --profile evm.light \
+  --start-block 18000000 \
+  --end-block 18001000 \
+  --target https://eth-node \
+  --headless
+```
+
+### Batch Mode Testing
+
+Test with batch requests:
+
+```bash
+chainbench start --profile evm.light \
+  --batch \
+  --batch-size 50 \
+  --users 100 \
+  --target https://eth-node \
+  --headless
+```
+
+### Remote Server Deployment
+
+Run in the background on a remote server:
+
+```bash
+nohup chainbench start --profile bsc.general \
+  --workers 4 \
+  --users 200 \
+  --test-time 12h \
+  --target https://bsc-node \
+  --headless \
+  --autoquit \
+  --notify my-benchmark-alerts &
+```

@@ -1,0 +1,277 @@
+---
+title: Batch Requests
+description: Use JSON-RPC batch requests to test throughput and reduce network overhead with Chainbench
+---
+
+Batch requests allow you to send multiple JSON-RPC calls in a single HTTP request, reducing network overhead and testing your node's ability to handle batched operations.
+
+## What Are Batch Requests?
+
+JSON-RPC batch requests combine multiple RPC calls into a single HTTP request. Instead of sending:
+
+```json
+{"jsonrpc": "2.0", "method": "eth_blockNumber", "id": 1}
+{"jsonrpc": "2.0", "method": "eth_chainId", "id": 2}
+```
+
+as two separate requests, batch mode sends:
+
+```json
+[
+  {"jsonrpc": "2.0", "method": "eth_blockNumber", "id": 1},
+  {"jsonrpc": "2.0", "method": "eth_chainId", "id": 2}
+]
+```
+
+as a single request, receiving all responses together.
+
+## Enabling Batch Mode
+
+Use the `--batch` flag to enable batch requests:
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --batch --headless --autoquit
+```
+
+<Note>
+When batch mode is enabled, Chainbench automatically groups RPC calls according to the batch size you specify.
+</Note>
+
+## Configuring Batch Size
+
+The `--batch-size` flag controls how many requests to include in each batch (default: 10):
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://node-url --batch --batch-size 20 --headless --autoquit
+```
+
+This sends 20 RPC calls in each batch request.
+
+<Tip>
+The optimal batch size depends on your node's capabilities and network conditions. Start with the default (10) and adjust based on your results.
+</Tip>
+
+## Batch Testing with Single Methods
+
+Test a specific method using batches:
+
+```bash
+chainbench start eth_blockNumber --users 50 --workers 2 --test-time 12h --target https://node-url --batch --batch-size 10 --headless --autoquit
+```
+
+This sends multiple `eth_blockNumber` calls batched together in each request.
+
+## Batch Testing with Profiles
+
+When using profiles, batch mode groups different RPC methods together:
+
+```bash
+chainbench start --profile bsc.general --users 100 --workers 4 --test-time 2h --target https://node-url --batch --batch-size 15 --headless --autoquit
+```
+
+Each batch request will contain a mix of methods from the profile (e.g., `eth_call`, `eth_blockNumber`, `eth_getTransactionReceipt`) according to their configured weights.
+
+## Benefits of Batch Requests
+
+### Reduced Network Overhead
+
+- Fewer HTTP connections
+- Lower latency per individual RPC call
+- Reduced header overhead
+
+### Higher Throughput Testing
+
+- Test node's batch processing capabilities
+- Simulate high-volume applications
+- Measure performance under batch load
+
+### Real-World Simulation
+
+Many production applications use batch requests:
+- Web3 dApps fetching multiple data points
+- Indexers collecting blockchain data
+- Analytics platforms querying multiple endpoints
+
+<Warning>
+Batch requests can be more resource-intensive for the node. Monitor your node's CPU and memory usage when testing with large batch sizes.
+</Warning>
+
+## Comparing Batch vs Individual Requests
+
+Test the same profile with and without batching to compare performance:
+
+### Individual Requests
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 30m --target https://node-url --headless --autoquit --run-id individual-test
+```
+
+### Batch Requests
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 30m --target https://node-url --batch --batch-size 10 --headless --autoquit --run-id batch-test
+```
+
+<Steps>
+  <Step title="Run individual request test">
+    Execute the test without `--batch` flag and note the results
+  </Step>
+  
+  <Step title="Run batch request test">
+    Execute the same test with `--batch` and `--batch-size` flags
+  </Step>
+  
+  <Step title="Compare results">
+    Analyze:
+    - Total requests per second
+    - Average response time
+    - 95th percentile latency
+    - Failure rates
+  </Step>
+  
+  <Step title="Optimize batch size">
+    Adjust `--batch-size` and retest to find the optimal value
+  </Step>
+</Steps>
+
+## Finding the Optimal Batch Size
+
+The optimal batch size varies by:
+- Node implementation (Geth, Erigon, etc.)
+- Node hardware specifications
+- Network conditions
+- Types of RPC methods being called
+
+### Testing Strategy
+
+Start small and increase gradually:
+
+```bash
+# Test with batch size 5
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 15m --target https://node-url --batch --batch-size 5 --headless --autoquit --run-id batch-5
+
+# Test with batch size 10
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 15m --target https://node-url --batch --batch-size 10 --headless --autoquit --run-id batch-10
+
+# Test with batch size 25
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 15m --target https://node-url --batch --batch-size 25 --headless --autoquit --run-id batch-25
+
+# Test with batch size 50
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 15m --target https://node-url --batch --batch-size 50 --headless --autoquit --run-id batch-50
+```
+
+Compare the results to identify where performance peaks and when it starts degrading.
+
+<Tip>
+Watch for increased error rates or timeouts as you increase batch size—these indicate you've exceeded the node's optimal processing capacity.
+</Tip>
+
+## Batch Mode with Different Test Data Sizes
+
+Batch processing can be affected by test data complexity:
+
+```bash
+# Light data with small batches
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --batch --batch-size 10 --size S --headless --autoquit
+
+# Heavy data with larger batches
+chainbench start --profile evm.heavy --users 50 --workers 2 --test-time 1h --target https://node-url --batch --batch-size 20 --size M --headless --autoquit
+```
+
+## Advanced: Batch Mode Tags
+
+Chainbench internally uses tags to handle batch vs individual request modes:
+
+- `batch`: Used for profile-based batch testing
+- `batch_single`: Used for single-method batch testing
+- `single`: Used for individual request testing
+
+You don't need to manage these tags manually—they're automatically applied based on the `--batch` flag.
+
+<Note>
+When `--batch` is enabled, non-batch tasks are automatically excluded from the test.
+</Note>
+
+## Limitations and Considerations
+
+### Node Support
+
+Not all nodes support batch requests or have the same batch limits:
+- Check your node's documentation for batch support
+- Some nodes may have maximum batch size limits
+- Rate limiting may apply differently to batched requests
+
+### Method Compatibility
+
+Some RPC methods may not work well in batches:
+- Long-running methods (traces, debug calls)
+- Methods with large response payloads
+- Subscription-based methods
+
+### Error Handling
+
+In batch mode:
+- A failure in one request doesn't affect others in the batch
+- Error rates may be harder to attribute to specific methods
+- Monitor both batch-level and individual request-level failures
+
+<Warning>
+Some blockchain nodes have different timeout policies for batch requests. A batch request might timeout even if individual requests would succeed.
+</Warning>
+
+## Best Practices
+
+### Start Conservative
+
+```bash
+chainbench start --profile evm.light --users 10 --workers 1 --test-time 5m --target https://node-url --batch --batch-size 5 --size XS --headless --autoquit
+```
+
+- Begin with small batch sizes (5-10)
+- Use few users and workers
+- Test with minimal data (size XS or S)
+
+### Scale Gradually
+
+1. Increase batch size
+2. Increase number of users
+3. Increase test duration
+4. Increase data size
+
+### Monitor Node Health
+
+- Watch CPU and memory usage
+- Monitor network bandwidth
+- Check for increased error rates
+- Observe response time trends
+
+### Production Testing
+
+```bash
+chainbench start --profile ethereum.general --users 100 --workers 4 --test-time 2h --target https://node-url --batch --batch-size 15 --size M --headless --autoquit
+```
+
+Only run intensive batch tests after validating with smaller configurations.
+
+## Troubleshooting
+
+### High Failure Rates
+
+- Reduce batch size
+- Decrease number of users
+- Check node timeout configurations
+- Verify node supports batch requests
+
+### Slow Response Times
+
+- Lower batch size
+- Reduce concurrent users
+- Check node resource utilization
+- Consider network latency
+
+### Timeout Errors
+
+- Decrease batch size
+- Avoid mixing fast and slow methods
+- Adjust timeout settings if possible
+- Use smaller test data sizes

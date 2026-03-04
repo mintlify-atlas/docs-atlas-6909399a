@@ -1,0 +1,482 @@
+---
+title: Load Pattern Shapes
+description: Configure load distribution patterns for advanced benchmarking scenarios
+---
+
+## Overview
+
+Load pattern shapes control how the load is distributed over time during a benchmark. While the default behavior is a simple ramp-up, custom shapes enable more sophisticated testing scenarios like step increases, spike testing, and custom patterns.
+
+## Default Behavior (Ramp-Up)
+
+When no shape is specified, Chainbench uses a linear ramp-up pattern:
+
+1. **Ramp-up phase**: Users are added at the spawn rate until the target number is reached
+2. **Steady state**: The target number of users is maintained for the remaining test duration
+
+```bash
+chainbench start --users 100 --spawn-rate 10 --test-time 10m
+```
+
+This results in:
+- 0-10s: Ramping from 0 to 100 users (10 users/second)
+- 10s-10m: Maintaining 100 users
+
+```
+Users
+100 |         ████████████████████████████
+ 80 |       ██
+ 60 |     ██
+ 40 |   ██
+ 20 | ██
+  0 |█
+    +------------------------------------→ Time
+    0s  10s                          10m
+```
+
+## Available Shapes
+
+### Step Shape
+
+The step shape increases load in discrete steps, allowing you to observe system behavior at different load levels.
+
+#### How It Works
+
+- **Number of steps**: Calculated as `users / spawn_rate`
+- **Step duration**: `test_time / number_of_steps`
+- **Users per step**: Increases by `spawn_rate` each step
+
+#### Usage
+
+```bash
+chainbench start --shape step \
+  --users 100 \
+  --spawn-rate 20 \
+  --test-time 10m \
+  --target https://eth-node \
+  --headless
+```
+
+#### Example Calculation
+
+With `--users 100`, `--spawn-rate 20`, `--test-time 10m`:
+
+- Number of steps: 100 / 20 = 5 steps
+- Step duration: 10m / 5 = 2 minutes per step
+- User progression: 20 → 40 → 60 → 80 → 100
+
+```
+Users
+100 |                 ████████
+ 80 |             ████
+ 60 |         ████
+ 40 |     ████
+ 20 | ████
+  0 |█
+    +---------------------------→ Time
+    0  2m  4m  6m  8m  10m
+```
+
+#### Use Cases
+
+<Accordion title="Performance Plateau Detection">
+  Identify at which load level your infrastructure begins to degrade by observing metrics at each step.
+</Accordion>
+
+<Accordion title="Resource Scaling Validation">
+  Test auto-scaling behavior by observing how your infrastructure responds to each step increase.
+</Accordion>
+
+<Accordion title="Capacity Planning">
+  Determine the maximum sustainable load by incrementally increasing users until performance degrades.
+</Accordion>
+
+#### Implementation
+
+```python
+import math
+from locust import LoadTestShape
+
+class StepLoadShape(LoadTestShape):
+    """
+    This load shape determines the number of steps by using the 
+    total number of users divided by the spawn rate.
+    Duration of each step is calculated by dividing the total 
+    run time by the number of steps equally.
+    """
+    
+    use_common_options = True
+    
+    def tick(self):
+        run_time = self.get_run_time()
+        total_run_time = self.runner.environment.parsed_options.run_time
+        
+        if run_time < total_run_time:
+            step = self.runner.environment.parsed_options.spawn_rate
+            users = self.runner.environment.parsed_options.num_users
+            no_of_steps = round(users / step)
+            step_time = total_run_time / no_of_steps
+            user_count = min(step * math.ceil(run_time / step_time), users)
+            return user_count, step
+        return None
+```
+
+### Spike Shape
+
+The spike shape simulates sudden traffic surges to test infrastructure resilience and recovery.
+
+#### How It Works
+
+The spike pattern has three phases:
+
+1. **Baseline (40% of test time)**: 10% of target users
+2. **Spike (20% of test time)**: 100% of target users
+3. **Recovery (40% of test time)**: Back to 10% of target users
+
+#### Usage
+
+```bash
+chainbench start --shape spike \
+  --users 200 \
+  --spawn-rate 50 \
+  --test-time 10m \
+  --target https://eth-node \
+  --headless
+```
+
+#### Example Timeline
+
+With `--users 200` and `--test-time 10m`:
+
+- 0-4m: 20 users (10% of 200)
+- 4-6m: 200 users (100% - **spike**)
+- 6-10m: 20 users (10% - recovery)
+
+```
+Users
+200 |        ████
+180 |        ████
+160 |        ████
+ 60 |        ████
+ 40 |        ████
+ 20 |████████████████████████
+  0 |█
+    +----------------------→ Time
+    0   4m  6m         10m
+        └──┘
+        Spike
+```
+
+#### Use Cases
+
+<Accordion title="Resilience Testing">
+  Verify that your infrastructure can handle sudden traffic spikes without failing or degrading significantly.
+</Accordion>
+
+<Accordion title="Recovery Validation">
+  Ensure systems properly recover after a spike and don't remain in a degraded state.
+</Accordion>
+
+<Accordion title="Circuit Breaker Testing">
+  Test rate limiting, circuit breakers, and other protective mechanisms during sudden load increases.
+</Accordion>
+
+<Accordion title="Cache Invalidation">
+  Observe how caching systems behave when suddenly overwhelmed and during recovery.
+</Accordion>
+
+#### Implementation
+
+```python
+from locust import LoadTestShape
+
+class SpikeLoadShape(LoadTestShape):
+    """
+    A step load shape class that has the following shape:
+    10% of users start at the beginning for 40% of the test duration, 
+    then 100% of users for 20% of the test duration,
+    then 10% of users until the end of the test duration.
+    """
+    
+    use_common_options = True
+    
+    def tick(self):
+        run_time = self.get_run_time()
+        total_run_time = self.runner.environment.parsed_options.run_time
+        period_duration = round(total_run_time / 10)
+        spike_run_time_start = period_duration * 4
+        spike_run_time_end = period_duration * 6
+        
+        if run_time < spike_run_time_start:
+            user_count = round(self.runner.environment.parsed_options.num_users / 10)
+            return user_count, self.runner.environment.parsed_options.spawn_rate
+        elif run_time < spike_run_time_end:
+            return self.runner.environment.parsed_options.num_users, self.runner.environment.parsed_options.spawn_rate
+        elif run_time < total_run_time:
+            user_count = round(self.runner.environment.parsed_options.num_users / 10)
+            return user_count, self.runner.environment.parsed_options.spawn_rate
+        return None
+```
+
+## Listing Available Shapes
+
+To see all available shapes in your Chainbench installation:
+
+```bash
+chainbench list shapes
+```
+
+This displays shapes from the default `chainbench/shapes/` directory.
+
+## Creating Custom Shapes
+
+You can create custom load shapes by extending Locust's `LoadTestShape` class.
+
+### Basic Structure
+
+```python
+from locust import LoadTestShape
+
+class MyCustomShape(LoadTestShape):
+    """
+    Description of your custom shape behavior.
+    """
+    
+    # Use common CLI options (users, spawn_rate, test_time)
+    use_common_options = True
+    
+    def tick(self):
+        """
+        Returns a tuple of (user_count, spawn_rate) at each tick,
+        or None to stop the test.
+        """
+        run_time = self.get_run_time()
+        
+        # Your custom logic here
+        if run_time < some_condition:
+            return (user_count, spawn_rate)
+        return None
+```
+
+### Example: Wave Pattern
+
+Create a shape that oscillates between low and high load:
+
+```python
+import math
+from locust import LoadTestShape
+
+class WaveLoadShape(LoadTestShape):
+    """
+    A wave pattern that oscillates between 10% and 100% of users
+    in a sinusoidal pattern.
+    """
+    
+    use_common_options = True
+    
+    def tick(self):
+        run_time = self.get_run_time()
+        total_run_time = self.runner.environment.parsed_options.run_time
+        
+        if run_time < total_run_time:
+            max_users = self.runner.environment.parsed_options.num_users
+            min_users = max_users * 0.1
+            
+            # Calculate sinusoidal user count
+            amplitude = (max_users - min_users) / 2
+            offset = min_users + amplitude
+            user_count = offset + amplitude * math.sin(2 * math.pi * run_time / 60)
+            
+            return (round(user_count), self.runner.environment.parsed_options.spawn_rate)
+        return None
+```
+
+### Adding Custom Shapes
+
+1. Create your shape file in the `chainbench/shapes/` directory:
+
+```bash
+touch chainbench/shapes/wave.py
+```
+
+2. Implement your `LoadTestShape` class
+
+3. Use it with the `--shape` flag:
+
+```bash
+chainbench start --shape wave --users 100 --test-time 5m
+```
+
+## Shape Parameters
+
+### Common Options
+
+When `use_common_options = True`, shapes automatically use:
+
+<ParamField path="users" type="integer">
+  Target number of users from `--users` flag
+</ParamField>
+
+<ParamField path="spawn_rate" type="integer">
+  Spawn rate from `--spawn-rate` flag
+</ParamField>
+
+<ParamField path="test_time" type="string">
+  Total test duration from `--test-time` flag
+</ParamField>
+
+### Custom Options
+
+Shapes can define custom command-line options:
+
+```python
+class CustomShape(LoadTestShape):
+    @staticmethod
+    def add_arguments(parser):
+        parser.add_argument(
+            "--wave-frequency",
+            type=int,
+            default=60,
+            help="Frequency of wave in seconds"
+        )
+```
+
+## Combining Shapes with Other Features
+
+### With Monitors
+
+```bash
+chainbench start --shape spike \
+  --users 500 \
+  --test-time 15m \
+  -m sync-lag-monitor \
+  --headless \
+  --target https://eth-node
+```
+
+### With Batch Mode
+
+```bash
+chainbench start --shape step \
+  --users 200 \
+  --spawn-rate 40 \
+  --batch \
+  --batch-size 25 \
+  --target https://eth-node
+```
+
+### With Custom Profiles
+
+```bash
+chainbench start --shape spike \
+  --profile ethereum.general \
+  --users 300 \
+  --test-time 20m \
+  --headless
+```
+
+## Best Practices
+
+<Accordion title="Choose the Right Shape">
+  - **Default (ramp-up)**: General performance testing and baseline metrics
+  - **Step**: Capacity planning and identifying performance thresholds
+  - **Spike**: Resilience testing and auto-scaling validation
+  - **Custom**: Specific scenarios matching your production traffic patterns
+</Accordion>
+
+<Accordion title="Duration Considerations">
+  - **Step shape**: Ensure each step duration is long enough to observe steady-state behavior (typically 2-5 minutes per step)
+  - **Spike shape**: Test duration should be at least 10 minutes to capture full baseline-spike-recovery cycle
+  - **Custom shapes**: Consider monitoring and metric collection intervals
+</Accordion>
+
+<Accordion title="Resource Planning">
+  - Higher peak loads require more worker processes
+  - Monitor client machine resources during spike tests
+  - Consider distributed load generation for large-scale spike tests
+  - Account for network latency in shape timing
+</Accordion>
+
+<Accordion title="Analysis and Metrics">
+  - Correlate shape timing with performance metrics
+  - Look for lag in system response during phase transitions
+  - Compare baseline vs. peak performance
+  - Validate recovery time after spikes
+</Accordion>
+
+## Troubleshooting
+
+### Shape Not Found
+
+If you receive a "shape not found" error:
+
+1. Verify the shape name: `chainbench list shapes`
+2. Check the file exists in `chainbench/shapes/`
+3. Ensure the file has a `.py` extension
+4. Verify the class inherits from `LoadTestShape`
+
+### Unexpected Load Pattern
+
+If the load doesn't match expectations:
+
+1. Check spawn rate is appropriate for the shape
+2. Verify test duration is long enough for the pattern
+3. Monitor worker process logs for issues
+4. Ensure sufficient system resources on the load generator
+
+### Performance During Transitions
+
+If you see issues during shape transitions:
+
+1. Adjust spawn rate for smoother transitions
+2. Increase step duration in step shapes
+3. Monitor both client and server resources
+4. Check for network saturation during rapid ramp-ups
+
+## Examples
+
+### Step Load Test for Capacity Planning
+
+```bash
+chainbench start --shape step \
+  --profile evm.light \
+  --users 500 \
+  --spawn-rate 100 \
+  --test-time 25m \
+  --target https://eth-node \
+  --headless \
+  --autoquit \
+  --results-dir /data/capacity-test
+```
+
+This creates 5 steps (500/100), each lasting 5 minutes (25m/5).
+
+### Spike Resilience Test
+
+```bash
+chainbench start --shape spike \
+  --profile ethereum.general \
+  --users 1000 \
+  --spawn-rate 200 \
+  --test-time 30m \
+  --target https://mainnet-node \
+  --headless \
+  --autoquit \
+  -m sync-lag-monitor \
+  --notify spike-test-alerts
+```
+
+Baseline at 100 users, spike to 1000 users, monitor lag throughout.
+
+### Custom Wave Pattern (Advanced)
+
+Create `chainbench/shapes/wave.py` with the wave implementation above, then:
+
+```bash
+chainbench start --shape wave \
+  --users 400 \
+  --spawn-rate 50 \
+  --test-time 15m \
+  --target https://test-node \
+  --headless
+```

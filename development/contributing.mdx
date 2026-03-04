@@ -1,0 +1,268 @@
+---
+title: Contributing
+description: Guidelines for contributing to Chainbench development
+---
+
+All types of contributions are encouraged and valued. This guide will help you get started with contributing to Chainbench and ensure a smooth experience for everyone involved.
+
+## Ways to Support the Project
+
+If you like the project but don't have time to contribute code, there are other ways to show your support:
+
+- Star the project on GitHub
+- Tweet about it and share with your network
+- Reference Chainbench in your project's readme
+- Mention the project at local meetups and tell your friends/colleagues
+
+## Getting Started
+
+<Steps>
+  <Step title="Install Dependencies">
+    Chainbench uses Poetry for dependency management:
+    ```bash
+    poetry install
+    ```
+  </Step>
+  
+  <Step title="Set Up Pre-commit Hooks">
+    Install pre-commit hooks to automatically check code quality:
+    ```bash
+    poetry run pre-commit install
+    ```
+  </Step>
+  
+  <Step title="Make Your Changes">
+    Follow the coding conventions and test your changes thoroughly.
+  </Step>
+  
+  <Step title="Run Quality Checks">
+    Before submitting, ensure all checks pass:
+    ```bash
+    poetry run pre-commit run --all-files
+    ```
+  </Step>
+</Steps>
+
+## Coding Conventions
+
+Chainbench follows strict code quality standards to maintain consistency:
+
+<Accordion title="Formatting Standards">
+  - **Black**: 120-character line length for code formatting
+  - **isort**: Black-compatible profile for import sorting
+  - **Type hints**: Use type hints where appropriate
+  - All code must pass MyPy type checking
+</Accordion>
+
+<Accordion title="Linting Rules">
+  - **Flake8**: Standard linting with E203 and W503 ignored for Black compatibility
+  - Keep the codebase clean and well-documented
+  - Follow existing patterns in the codebase
+</Accordion>
+
+## Code Quality Checks
+
+Before completing any task, run these quality checks:
+
+| Command | Purpose |
+| --- | --- |
+| `poetry run black .` | Format code to project standards |
+| `poetry run isort .` | Sort imports |
+| `poetry run flake8` | Run linting checks |
+| `poetry run mypy .` | Run type checks |
+
+Or use pre-commit hooks to run all checks at once:
+
+```bash
+poetry run pre-commit run --all-files
+```
+
+## Testing Guidelines
+
+<Note>
+  Always use headless mode with short test durations during development. Never run long-duration tests during development sessions.
+</Note>
+
+Test your changes progressively:
+
+<Steps>
+  <Step title="Unit Testing">
+    Test individual user classes and methods in isolation.
+  </Step>
+  
+  <Step title="Profile Validation">
+    Verify profiles load correctly:
+    ```bash
+    poetry run chainbench list profiles
+    ```
+  </Step>
+  
+  <Step title="Short Headless Tests">
+    Run brief tests with minimal load:
+    ```bash
+    poetry run chainbench start --profile evm.light --users 5 --workers 1 --test-time 30s --target https://test-node --headless --autoquit
+    ```
+  </Step>
+  
+  <Step title="Method Discovery">
+    Test endpoint compatibility:
+    ```bash
+    poetry run chainbench discover https://test-node --clients geth
+    ```
+  </Step>
+</Steps>
+
+### Testing Best Practices
+
+- **Start with minimal load**: Use few users and low spawn rates
+- **Use --autoquit flag**: Ensures tests terminate properly
+- **Test against dev nodes first**: Never test production nodes during development
+- **Start with light profiles**: Before testing heavy profiles
+- **Monitor target node health**: During benchmarks
+
+## Development Workflow
+
+<Steps>
+  <Step title="Make Changes">
+    Implement your feature or bug fix in the source code.
+  </Step>
+  
+  <Step title="Format Code">
+    Run formatting tools:
+    ```bash
+    poetry run black . && poetry run isort .
+    ```
+  </Step>
+  
+  <Step title="Run Linting">
+    Check for linting issues:
+    ```bash
+    poetry run flake8
+    ```
+  </Step>
+  
+  <Step title="Type Checking">
+    Verify type annotations:
+    ```bash
+    poetry run mypy .
+    ```
+  </Step>
+  
+  <Step title="Test with Minimal Profile">
+    Validate changes with a simple test:
+    ```bash
+    poetry run chainbench start --profile evm.light --users 5 --workers 1 --test-time 30s --target https://test-node --headless --autoquit
+    ```
+  </Step>
+  
+  <Step title="Gradually Increase Complexity">
+    Test with more complex scenarios and higher load.
+  </Step>
+</Steps>
+
+## Managing Dependencies
+
+If you need to add or update dependencies:
+
+<Steps>
+  <Step title="Add Dependency">
+    Use Poetry to manage dependencies:
+    ```bash
+    poetry add <package>
+    # or for dev dependencies
+    poetry add --group dev <package>
+    ```
+  </Step>
+  
+  <Step title="Update Lock File">
+    Update the lock file without updating other dependencies:
+    ```bash
+    poetry lock --no-update
+    ```
+  </Step>
+  
+  <Step title="Install Updated Dependencies">
+    Install the newly added dependencies:
+    ```bash
+    poetry install
+    ```
+  </Step>
+  
+  <Step title="Verify Compatibility">
+    Ensure compatibility with Python 3.10+ as specified in the project.
+  </Step>
+</Steps>
+
+## Reporting Bugs
+
+### Before Submitting a Bug Report
+
+- Ensure you're using the latest version
+- Verify it's actually a bug and not an error on your side
+- Check if there's already a bug report for your issue
+- Search the internet to see if others have encountered the same issue
+- Collect information about the bug:
+  - Stack trace (Traceback)
+  - OS, Platform, and Version
+  - Python version and package versions
+  - Your input and the output
+  - Can you reliably reproduce the issue?
+
+### How to Submit a Good Bug Report
+
+<Note>
+  Never report security-related issues publicly. Contact the maintainers directly for security vulnerabilities.
+</Note>
+
+When submitting a bug report:
+
+- Open an Issue on GitHub
+- Explain the expected behavior vs. actual behavior
+- Provide as much context as possible
+- Describe the reproduction steps in detail
+- Include the information you collected
+
+The project team will:
+- Label the issue accordingly
+- Try to reproduce the issue with your steps
+- Mark it as `needs-repro` if steps are unclear
+- Mark it as `needs-fix` once reproduced
+
+## Suggesting Enhancements
+
+### Before Submitting an Enhancement
+
+- Ensure you're using the latest version
+- Check if the enhancement has already been suggested
+- Verify your idea fits with the project's scope and aims
+- Make a strong case for why this feature would benefit most users
+
+### How to Submit a Good Enhancement Suggestion
+
+Enhancement suggestions are tracked as GitHub issues:
+
+- Use a clear and descriptive title
+- Provide a step-by-step description in detail
+- Describe the current behavior and expected behavior
+- Explain why this enhancement would be useful to most users
+- Point to other projects that implement similar features
+
+## Legal Notice
+
+When contributing to this project, you must agree that:
+- You have authored 100% of the content
+- You have the necessary rights to the content
+- The content you contribute may be provided under the project license
+
+## Questions?
+
+Before asking a question:
+- Search for existing Issues that might help you
+- Search the internet for answers first
+
+If you still need clarification:
+- Open an Issue on GitHub
+- Provide as much context as possible
+- Include relevant project and platform versions
+
+We'll take care of your issue as soon as possible.

@@ -1,0 +1,326 @@
+---
+title: Monitors
+description: Track additional metrics during benchmarks with Chainbench monitors
+---
+
+## What are Monitors?
+
+Monitors are separate background processes that run during tests to collect additional metrics and data beyond standard load testing metrics. They provide insights into the blockchain node's behavior and performance characteristics.
+
+<Note>
+Monitors currently only work in headless mode. They are not available when running in web UI mode.
+</Note>
+
+## Available Monitors
+
+### sync-lag-monitor
+
+The sync-lag monitor tracks how far behind real-time the node is by comparing block timestamps to the current time.
+
+**What it measures:**
+- Sync lag in seconds
+- Block number being served
+- Timestamp of measurements
+
+**How it works:**
+1. Fetches the latest block from the node every 10 seconds
+2. Extracts the block timestamp
+3. Calculates the difference between current time and block timestamp
+4. Records the lag to a CSV file
+
+## Using Monitors
+
+Add monitors to your test using the `-m` or `--monitor` flag:
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  -m sync-lag-monitor
+```
+
+<Info>
+You can specify multiple monitors by using the `-m` flag multiple times:
+```bash
+-m sync-lag-monitor -m another-monitor
+```
+</Info>
+
+## Sync Lag Monitor
+
+### Use Cases
+
+**Testing Sync Performance:**
+- Monitor if a node stays in sync during heavy load
+- Identify if load testing impacts sync performance
+- Track recovery after network partitions
+
+**Archive Node Validation:**
+- Verify archive nodes serve historical data correctly
+- Confirm nodes aren't falling behind under query load
+
+**Node Comparison:**
+- Compare sync lag across different node implementations
+- Evaluate infrastructure impact on sync performance
+
+### Output Format
+
+The monitor creates a `sync_lag.csv` file in the results directory:
+
+```csv
+timestamp,lag (s),block number
+2026-03-04 10:15:32.123456,2,18500000
+2026-03-04 10:15:42.234567,1,18500001
+2026-03-04 10:15:52.345678,3,18500002
+```
+
+**Columns:**
+- `timestamp`: When the measurement was taken
+- `lag (s)`: Sync lag in seconds (minimum 0)
+- `block number`: Block number that was queried
+
+### Implementation Details
+
+<Accordion title="Sync Lag Monitor Implementation">
+
+The monitor uses different RPC methods depending on the blockchain:
+
+**For EVM chains:**
+```python
+def eth_get_block_by_number(http_client: HttpClient) -> dict:
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_getBlockByNumber",
+        "params": ["latest", False],
+    }
+    response = http_client.post(data=body)
+    return response.json["result"]
+```
+
+**For Solana:**
+```python
+def get_slot(http_client: HttpClient) -> int:
+    response = http_client.post(
+        data={"jsonrpc": "2.0", "id": 1, "method": "getSlot", "params": []}
+    )
+    return response.json["result"]
+
+def get_block(http_client: HttpClient, slot: int) -> dict:
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getBlock",
+        "params": [
+            slot,
+            {
+                "encoding": "jsonParsed",
+                "transactionDetails": "none",
+                "rewards": False,
+                "maxSupportedTransactionVersion": 0,
+            },
+        ],
+    }
+    response = http_client.post(data=body)
+    return response.json["result"]
+```
+
+**Lag calculation:**
+```python
+def calculate_lag(current_timestamp: datetime, block_timestamp: datetime) -> int:
+    """
+    Calculate the difference between current time and block timestamp.
+    Returns minimum 0 to handle precision differences.
+    """
+    return max(int((current_timestamp - block_timestamp).total_seconds()), 0)
+```
+
+</Accordion>
+
+### Example Results
+
+A well-synced node will show consistently low lag:
+
+```csv
+timestamp,lag (s),block number
+2026-03-04 14:20:10,1,18500100
+2026-03-04 14:20:20,2,18500101
+2026-03-04 14:20:30,1,18500102
+2026-03-04 14:20:40,1,18500103
+```
+
+A node falling behind might show:
+
+```csv
+timestamp,lag (s),block number
+2026-03-04 14:20:10,5,18500100
+2026-03-04 14:20:20,15,18500100
+2026-03-04 14:20:30,28,18500101
+2026-03-04 14:20:40,42,18500101
+```
+
+<Tip>
+Import the CSV into a spreadsheet or analysis tool to visualize sync lag over time and correlate with load test events.
+</Tip>
+
+## Monitor Lifecycle
+
+Monitors run for the entire duration of the test:
+
+1. **Test starts**: Monitor process launches
+2. **During test**: Monitor collects data every 10 seconds
+3. **Test ends**: Monitor stops and closes output file
+
+```bash
+# Monitor output in logs
+[2026-03-04 14:20:00,123] INFO: Start monitoring sync lag
+[2026-03-04 14:20:10,456] INFO: Written 1 row to sync_lag.csv
+[2026-03-04 14:20:20,789] INFO: Written 1 row to sync_lag.csv
+...
+[2026-03-04 15:20:00,123] INFO: Finished monitoring sync lag
+```
+
+## Interpreting Sync Lag Data
+
+### Good Sync Performance
+
+- Lag consistently between 0-5 seconds
+- Block numbers increment regularly
+- No correlation with load test intensity
+
+### Potential Issues
+
+**Increasing lag over time:**
+- Node may not have sufficient resources
+- Network connectivity issues
+- Node falling behind due to load
+
+**High lag spikes:**
+- Correlated with test load changes
+- May indicate node struggling under specific query types
+- Could suggest need for optimization
+
+**Stuck block numbers:**
+- Node stopped syncing
+- Connection issues
+- Node crashed or stalled
+
+## Combining with Load Shapes
+
+Monitors are especially useful with load shapes:
+
+```bash
+chainbench start --profile evm.light \
+  --shape spike \
+  --users 1000 \
+  --test-time 30m \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  -m sync-lag-monitor
+```
+
+**Analysis questions:**
+- Does sync lag increase during the spike?
+- How long does recovery take after the spike ends?
+- Is there a correlation between RPS and sync lag?
+
+<Accordion title="Example Analysis Workflow">
+
+1. **Run test with monitor:**
+   ```bash
+   chainbench start --profile evm.heavy \
+     --shape step --users 100 --spawn-rate 20 \
+     --test-time 1h --target https://node \
+     --headless -m sync-lag-monitor
+   ```
+
+2. **Collect results:**
+   - `sync_lag.csv` from monitor
+   - `stats.csv` from load test results
+
+3. **Analyze correlation:**
+   - Plot sync lag over time
+   - Overlay with RPS from stats
+   - Identify when lag increases
+
+4. **Draw conclusions:**
+   - Which load levels cause sync issues?
+   - Does the node recover?
+   - Are certain operations more impactful?
+
+</Accordion>
+
+## Error Handling
+
+The monitor includes error handling for common issues:
+
+```python
+try:
+    # Fetch block and calculate lag
+    ...
+except (KeyError, JSONDecodeError):
+    logger.error("Error decoding JSON or key not found")
+    sleep(1)  # Brief pause before retry
+```
+
+**Common errors:**
+- Node returns invalid JSON
+- Block missing expected fields
+- Network timeout
+
+<Note>
+If you see repeated errors in monitor logs, check that the node is accessible and responding correctly to RPC calls.
+</Note>
+
+## Future Monitors
+
+The monitor system is extensible. Potential future monitors could track:
+
+- Resource usage (CPU, memory, disk I/O)
+- Peer count and network health
+- Database query performance
+- Cache hit rates
+- Custom metrics specific to node implementations
+
+## Technical Details
+
+### Monitor Registration
+
+Monitors are registered in `chainbench/util/monitor.py`:
+
+```python
+monitors = {
+    "sync-lag-monitor": sync_lag_monitor
+}
+```
+
+### Monitor Function Signature
+
+```python
+def sync_lag_monitor(
+    user_class: typing.Any,     # User class being tested
+    endpoint: str,               # Target endpoint URL
+    result_path: Path,           # Directory for output files
+    duration: str                # Test duration string
+):
+    # Monitor implementation
+    ...
+```
+
+### Sampling Interval
+
+The sync-lag monitor samples every 10 seconds. This balances:
+- Sufficient data points for analysis
+- Minimal overhead on the node
+- Reasonable file sizes
+
+For a 1-hour test, this produces ~360 data points.
+
+<Info>
+Monitors run independently of the load test and do not interfere with benchmark results.
+</Info>

@@ -1,0 +1,214 @@
+---
+title: Installation
+description: Install Chainbench using pip or Poetry and set up your environment
+---
+
+## Prerequisites
+
+Before installing Chainbench, ensure you have the following:
+
+- **Python 3.10 or higher**: Check your version with `python --version` or `python3 --version`
+- **Poetry 1.7+** (optional, only if installing via Poetry): See [Poetry installation guide](https://python-poetry.org/docs/#installation)
+
+<Note>
+Chainbench is tested and supported on Python 3.10+. Earlier versions are not supported.
+</Note>
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="pip (Recommended)">
+    ### Install via pip
+
+    The easiest way to install Chainbench is using pip:
+
+    ```bash
+    pip install chainbench
+    ```
+
+    After installation, verify it's working:
+
+    ```bash
+    chainbench --version
+    ```
+
+    ### Run Commands
+
+    When installed via pip, you can run Chainbench directly:
+
+    ```bash
+    chainbench start --help
+    chainbench list profiles
+    ```
+
+    ### Upgrade Chainbench
+
+    To upgrade to the latest version:
+
+    ```bash
+    pip install --upgrade chainbench
+    ```
+  </Tab>
+
+  <Tab title="Poetry (Development)">
+    ### Install via Poetry
+
+    For development or if you prefer Poetry for dependency management:
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone git@github.com:chainstacklabs/chainbench.git
+        ```
+      </Step>
+
+      <Step title="Navigate to the directory">
+        ```bash
+        cd chainbench
+        ```
+      </Step>
+
+      <Step title="Install dependencies">
+        For regular usage (without dev tools):
+        ```bash
+        poetry install --without dev
+        ```
+
+        For development (includes linting, formatting, type checking):
+        ```bash
+        poetry install
+        ```
+      </Step>
+
+      <Step title="Verify installation">
+        ```bash
+        poetry run chainbench --version
+        ```
+      </Step>
+    </Steps>
+
+    ### Run Commands
+
+    When installed via Poetry, prefix commands with `poetry run`:
+
+    ```bash
+    poetry run chainbench start --help
+    poetry run chainbench list profiles
+    ```
+
+    <Note>
+    All examples in the documentation use the pip installation format (`chainbench`). If you're using Poetry, remember to add `poetry run` before each command.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Core Dependencies
+
+Chainbench automatically installs these key dependencies:
+
+- **locust**: Core load testing framework (^2.39.0)
+- **click**: CLI interface framework (^8.1.6)
+- **locust-plugins**: Enhanced dashboards and metrics (^4.5.3)
+- **tenacity**: Retry mechanisms (^9.0.0)
+- **base58**: Encoding utilities for Solana (^2.1.1)
+- **solders**: Solana SDK (^0.26.0)
+- **websocket-client**: WebSocket support (^1.8.0)
+- **orjson**: Fast JSON parsing (^3.11.2)
+
+<Warning>
+Chainbench requires Python 3.10 or higher. Attempting to install on earlier Python versions will fail.
+</Warning>
+
+## Verify Installation
+
+Confirm Chainbench is installed correctly:
+
+<CodeGroup>
+```bash pip installation
+chainbench --version
+chainbench --help
+```
+
+```bash Poetry installation  
+poetry run chainbench --version
+poetry run chainbench --help
+```
+</CodeGroup>
+
+You should see output showing the version number and available commands:
+
+```
+chainbench-0.8.8
+```
+
+## List Available Profiles
+
+Check that built-in profiles are accessible:
+
+```bash
+chainbench list profiles
+```
+
+You should see profiles like:
+```
+arbitrum.general
+avalanche.general
+base.general
+bsc.general
+ethereum.general
+evm.heavy
+evm.light
+polygon.general
+solana.general
+...
+```
+
+## List Available Methods
+
+See which RPC methods are supported:
+
+```bash
+chainbench list methods
+```
+
+This displays methods grouped by protocol (EVM, Solana, etc.).
+
+## Troubleshooting
+
+### Command Not Found
+
+If `chainbench` command is not found after pip installation:
+
+1. Ensure pip's binary directory is in your PATH
+2. Try using `python -m chainbench` or `python3 -m chainbench` instead
+3. Consider using a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install chainbench
+   ```
+
+### Python Version Mismatch
+
+If you get version errors:
+
+1. Check your Python version: `python3 --version`
+2. Upgrade Python to 3.10 or higher
+3. Use pyenv or conda to manage multiple Python versions
+
+### Poetry Lock Issues
+
+If you encounter lock file errors with Poetry:
+
+```bash
+poetry lock --no-update
+poetry install
+```
+
+## Next Steps
+
+Now that Chainbench is installed, proceed to the quickstart guide:
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Run your first blockchain benchmark in minutes
+</Card>

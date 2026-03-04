@@ -1,0 +1,379 @@
+---
+title: Custom Profiles
+description: Create custom load testing profiles for your specific blockchain infrastructure and workload patterns
+---
+
+Profiles define which RPC methods to test and their relative weights. Creating custom profiles allows you to match your real-world traffic patterns or focus on specific functionality.
+
+## Profile Basics
+
+A profile is a Python file that contains a class inheriting from `EvmUser` (for EVM chains) or `SolanaUser` (for Solana). Profiles are located in the `chainbench/profile` directory, organized by blockchain.
+
+<Note>
+This guide provides comprehensive instructions for creating custom profiles tailored to your testing needs.
+</Note>
+
+## Creating Your First Profile
+
+Let's create a custom profile for testing Oasis blockchain.
+
+<Steps>
+  <Step title="Create the profile file">
+    Create a new file at `chainbench/profile/oasis/general.py`:
+    ```python
+    from chainbench.user import EvmUser
+
+    class OasisProfile(EvmUser):
+        pass
+    ```
+  </Step>
+
+  <Step title="Configure wait time">
+    Add a wait time between requests using `constant_pacing`:
+    ```python
+    from chainbench.user import EvmUser
+    from locust import constant_pacing
+
+    class OasisProfile(EvmUser):
+        wait_time = constant_pacing(1)
+    ```
+    
+    This sets a dynamic wait time calculated as `n - response_time`. If response time exceeds `n`, the next request is sent immediately.
+  </Step>
+
+  <Step title="Add tasks for RPC methods">
+    Add methods you want to test as tasks:
+    ```python
+    from chainbench.user import EvmUser
+    from chainbench.util.rng import get_rng
+    from locust import task, constant_pacing
+
+    class OasisProfile(EvmUser):
+        wait_time = constant_pacing(2)
+
+        @task
+        def get_block_by_number_task(self):
+            self.make_rpc_call(
+                name="get_block_by_number",
+                method="eth_getBlockByNumber",
+                params=self._block_params_factory(),
+            )
+
+        @task
+        def get_syncing_task(self):
+            self.make_rpc_call(
+                name="get_syncing",
+                method="eth_syncing",
+            )
+    ```
+  </Step>
+</Steps>
+
+## Test Data and Parameter Factories
+
+`EvmUser` comes with `EvmTestData` that automatically fetches real blockchain data before tests start. This data is used to generate realistic parameters for your RPC calls.
+
+### Available Parameter Factories
+
+- `_block_params_factory()`: Returns random block number with transaction details flag
+- `_transaction_by_hash_params_factory(rng)`: Returns random transaction hash
+- `_get_balance_params_factory(rng)`: Returns random address and block parameter
+- `_random_block_number_params_factory(rng)`: Returns random block number only
+
+<Tip>
+Use `get_rng()` to get a seeded random number generator that ensures consistent test data across workers and runs:
+```python
+from chainbench.util.rng import get_rng
+
+params=self._transaction_by_hash_params_factory(get_rng())
+```
+</Tip>
+
+## Adding Multiple Tasks
+
+Extend your profile with additional RPC methods:
+
+```python
+from chainbench.user import EvmUser
+from chainbench.util.rng import get_rng
+from locust import task, constant_pacing
+
+class OasisProfile(EvmUser):
+    wait_time = constant_pacing(2)
+
+    @task
+    def get_block_by_number_task(self):
+        self.make_rpc_call(
+            name="get_block_by_number",
+            method="eth_getBlockByNumber",
+            params=self._block_params_factory(),
+        )
+
+    @task
+    def get_balance_task(self):
+        self.make_rpc_call(
+            name="get_balance",
+            method="eth_getBalance",
+            params=self._get_balance_params_factory(get_rng()),
+        )
+
+    @task
+    def get_transaction_by_hash_task(self):
+        self.make_rpc_call(
+            name="get_transaction_by_hash",
+            method="eth_getTransactionByHash",
+            params=self._transaction_by_hash_params_factory(get_rng()),
+        )
+
+    @task
+    def get_block_number_task(self):
+        self.make_rpc_call(
+            name="block_number",
+            method="eth_blockNumber",
+        )
+```
+
+## Task Weights
+
+By default, all tasks have equal weight. Use task weights to match real-world traffic patterns:
+
+```python
+from chainbench.user import EvmUser
+from locust import task, constant_pacing
+
+class CustomProfile(EvmUser):
+    wait_time = constant_pacing(1)
+
+    @task(100)  # Called 100x more often
+    def call_task(self):
+        self.make_rpc_call(
+            name="call",
+            method="eth_call",
+            params=[
+                {
+                    "to": "0x55d398326f99059fF775485246999027B3197955",
+                    "data": "0x70a08231000000000000000000000000f977814e90da44bfa03b6295a0616a897441acec",
+                },
+                "latest",
+            ],
+        )
+
+    @task(10)  # Called 10x as often
+    def get_block_number_task(self):
+        self.make_rpc_call(
+            name="block_number",
+            method="eth_blockNumber",
+        )
+
+    @task(1)  # Base frequency
+    def get_syncing_task(self):
+        self.make_rpc_call(
+            name="get_syncing",
+            method="eth_syncing",
+        )
+```
+
+<Note>
+Task weights are relative. A task with weight 100 runs 10x more often than a task with weight 10.
+</Note>
+
+## Static vs Dynamic Parameters
+
+### Static Parameters
+
+For calls with fixed parameters, pass them directly:
+
+```python
+@task
+def get_syncing_task(self):
+    self.make_rpc_call(
+        name="get_syncing",
+        method="eth_syncing",
+    )
+
+@task
+def call_specific_contract(self):
+    self.make_rpc_call(
+        name="call",
+        method="eth_call",
+        params=[
+            {
+                "to": "0x...",
+                "data": "0x...",
+            },
+            "latest",
+        ],
+    )
+```
+
+### Dynamic Parameters
+
+Use parameter factories for randomized test data:
+
+```python
+@task
+def get_transaction_by_hash_task(self):
+    self.make_rpc_call(
+        name="get_transaction_by_hash",
+        method="eth_getTransactionByHash",
+        params=self._transaction_by_hash_params_factory(get_rng()),
+    )
+```
+
+## Simplified Profile Syntax
+
+For simpler profiles, use the `rpc_calls` dictionary syntax:
+
+```python
+from locust import constant_pacing
+from chainbench.user import EvmUser
+
+class EvmLightProfile(EvmUser):
+    wait_time = constant_pacing(1)
+
+    rpc_calls = {
+        EvmUser.eth_get_transaction_receipt: 1,
+        EvmUser.eth_block_number: 1,
+        EvmUser.eth_get_balance: 1,
+        EvmUser.eth_chain_id: 1,
+        EvmUser.eth_get_block_by_number: 1,
+        EvmUser.eth_get_transaction_by_hash: 1,
+        EvmUser.web3_client_version: 1,
+    }
+
+    tasks = EvmUser.expand_tasks(rpc_calls)
+```
+
+This is equivalent to defining individual `@task` methods but more concise.
+
+## Running Your Custom Profile
+
+Once created, run your profile with:
+
+```bash
+chainbench start --profile oasis.general --users 50 --workers 2 --test-time 1h --target https://node-url --headless --autoquit
+```
+
+<Tip>
+Verify your profile is detected:
+```bash
+chainbench list profiles
+```
+</Tip>
+
+## Using Custom Profile Directories
+
+Store profiles outside the default directory:
+
+```bash
+chainbench start --profile-dir /path/to/custom/profiles --profile my-custom-profile --users 50 --workers 2 --test-time 1h --target https://node-url --headless --autoquit
+```
+
+Or specify the full path directly:
+
+```bash
+chainbench start --profile-path /path/to/custom/profile.py --users 50 --workers 2 --test-time 1h --target https://node-url --headless --autoquit
+```
+
+## Advanced: Custom Test Data
+
+### Specifying Block Ranges
+
+Control which blocks to use for test data:
+
+```bash
+chainbench start --profile custom.profile --users 50 --workers 2 --test-time 1h --target https://node-url --start-block 1000000 --end-block 1001000 --headless --autoquit
+```
+
+<Warning>
+The `--use-latest-blocks` flag overrides custom block ranges.
+</Warning>
+
+### Reference Node for Data Generation
+
+Generate test data from a different node:
+
+```bash
+chainbench start --profile custom.profile --users 50 --workers 2 --test-time 1h --target https://node-to-test --ref-url https://archive-node --headless --autoquit
+```
+
+This is useful when your target node has limited historical data.
+
+## Profile Organization Best Practices
+
+### Directory Structure
+
+```
+chainbench/profile/
+├── ethereum/
+│   ├── general.py
+│   ├── consensus.py
+│   └── subscriptions.py
+├── bsc/
+│   └── general.py
+├── polygon/
+│   └── general.py
+└── custom/
+    ├── my-profile.py
+    └── test-profile.py
+```
+
+### Naming Conventions
+
+- Use lowercase with underscores: `my_profile.py`
+- Class names in PascalCase: `MyCustomProfile`
+- Descriptive names: `general.py`, `archive.py`, `heavy.py`
+
+### Documentation
+
+Add docstrings to your profiles:
+
+```python
+"""
+Custom BSC profile matching production traffic patterns.
+
+Distribution:
+- eth_call: 33%
+- eth_getTransactionReceipt: 31%
+- eth_getLogs: 12%
+- eth_blockNumber: 9%
+- Others: 15%
+"""
+
+from locust import constant_pacing
+from chainbench.user import EvmUser
+
+class BscProductionProfile(EvmUser):
+    wait_time = constant_pacing(1)
+    # ...
+```
+
+## Testing Your Profile
+
+Validate your custom profile before long test runs:
+
+<Steps>
+  <Step title="Verify profile loads">
+    ```bash
+    chainbench list profiles --profile-dir /path/to/profiles
+    ```
+  </Step>
+
+  <Step title="Run a short test">
+    ```bash
+    chainbench start --profile custom.test --users 5 --workers 1 --test-time 30s --target https://test-node --size XS --headless --autoquit
+    ```
+  </Step>
+
+  <Step title="Check results">
+    Review the output for errors and verify all methods executed successfully
+  </Step>
+
+  <Step title="Scale up gradually">
+    Increase users, workers, and test duration incrementally
+  </Step>
+</Steps>
+
+<Tip>
+Always test custom profiles with `--size XS` first to minimize test data generation time during development.
+</Tip>

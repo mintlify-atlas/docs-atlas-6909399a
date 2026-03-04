@@ -1,0 +1,225 @@
+---
+title: "Method Discovery"
+description: "Discover supported RPC methods on your blockchain endpoints"
+---
+
+The method discovery tool allows you to test which RPC methods are supported by your blockchain node endpoint. This is particularly useful when working with different node clients or testing compatibility across providers.
+
+## Overview
+
+Chainbench's discovery tool sends test requests to your endpoint for a comprehensive list of RPC methods and identifies which ones are supported. The tool intelligently handles different error codes and responses to determine method availability.
+
+## Basic Usage
+
+Discover methods on an endpoint:
+
+```bash
+chainbench discover https://your-node-url
+```
+
+By default, this tests against Ethereum JSON-RPC Specification methods.
+
+### Specify Client Types
+
+Target specific blockchain clients to test their supported methods:
+
+```bash
+chainbench discover https://your-node-url --clients geth,erigon
+```
+
+<Tip>
+Use multiple clients in a comma-separated list to test a broader range of methods specific to different implementations.
+</Tip>
+
+## Available Clients
+
+View all supported client options and their versions:
+
+```bash
+chainbench list clients
+```
+
+### Supported Clients
+
+The discovery tool supports multiple blockchain clients:
+
+- **Ethereum Clients**: `geth`, `erigon`, `besu`, `nethermind`, `reth`, `eth`
+- **EVM-Compatible**: `bsc`, `bor` (Polygon), `base`, `optimism`, `zksync`
+- **Other Chains**: `avalanchego`, `solana`, `juno`, `pathfinder` (Starknet)
+
+<Note>
+Some clients like Avalanche have multiple endpoints that are tested automatically:
+- `/ext/bc/C/rpc` (C-Chain RPC)
+- `/ext/bc/C/avax` (Avalanche specific)
+- `/ext/bc/P` (Platform Chain)
+- `/ext/bc/X` (Exchange Chain)
+</Note>
+
+## How It Works
+
+The discovery process works by:
+
+1. **Loading Method Database**: Reads from `methods.json` to get the list of methods supported by each client type
+2. **Filtering Methods**: Only tests methods that match the specified clients
+3. **Parallel Testing**: Uses a gevent pool to test up to 20 methods concurrently
+4. **Smart Detection**: Analyzes HTTP status codes and JSON-RPC error codes to determine support
+
+### Detection Logic
+
+The tool interprets responses as follows:
+
+<Accordion title="Response Status Codes">
+  - **200/400 + Error -32602**: Method supported (invalid params)
+  - **200/400 + Error -32601**: Method not supported
+  - **200/400 + Errors -32600/-32604**: Checks error message for "unsupported" keywords
+  - **429**: Too many requests - automatically retries with exponential backoff
+  - **Other errors**: Unable to determine
+</Accordion>
+
+## Output Format
+
+The discovery tool outputs results in a simple format:
+
+```
+eth_blockNumber, ✔
+eth_getBalance, ✔
+eth_sendTransaction, ✖
+debug_traceTransaction, Unable to determine. Unknown error -32000: method not found
+```
+
+Where:
+- ✔ indicates the method is supported
+- ✖ indicates the method is not supported
+- Error messages indicate the test was inconclusive
+
+## Advanced Usage
+
+### Testing Specific Client Endpoints
+
+For Avalanche nodes with multiple endpoints:
+
+```bash
+chainbench discover https://avalanche-node.com --clients avalanchego
+```
+
+This automatically tests all Avalanche-specific endpoints like C-Chain, P-Chain, and X-Chain.
+
+### Rate Limiting
+
+The discovery tool includes built-in retry logic for rate-limited endpoints:
+
+```python
+@retry(
+    retry=retry_if_exception_type(TooManyRequestsError),
+    wait=wait_exponential(multiplier=1, min=2, max=10)
+)
+```
+
+When a 429 (Too Many Requests) status is received, the tool automatically:
+- Waits 2 seconds before the first retry
+- Exponentially increases wait time up to 10 seconds
+- Continues retrying until successful
+
+<Warning>
+Be mindful of rate limits when testing public endpoints. The discovery tool makes one request per method, which can be substantial for comprehensive client lists.
+</Warning>
+
+## Client Configuration
+
+The discovery tool uses two JSON configuration files:
+
+### clients.json
+
+Defines available clients and their versions:
+
+```json
+{
+  "geth": {
+    "version": "1.13.5"
+  },
+  "erigon": {
+    "version": "2.55.1"
+  },
+  "avalanchego": {
+    "version": "1.10.17",
+    "endpoints": [
+      "/ext/bc/C/rpc",
+      "/ext/bc/P",
+      "/ext/bc/X"
+    ]
+  }
+}
+```
+
+### methods.json
+
+Maps RPC methods to the clients that support them. This file determines which methods are tested for each client option.
+
+## Use Cases
+
+<Accordion title="Validate Node Configuration">
+After setting up a new node, use discovery to verify all expected methods are enabled and accessible.
+</Accordion>
+
+<Accordion title="Compare Providers">
+Test multiple endpoints to compare method availability across different infrastructure providers.
+</Accordion>
+
+<Accordion title="Debug Access Issues">
+Quickly identify if a method is unsupported or if there's a configuration issue preventing access.
+</Accordion>
+
+<Accordion title="Profile Compatibility">
+Before running a benchmark profile, verify that the target endpoint supports all required methods.
+</Accordion>
+
+## Troubleshooting
+
+### Timeout Errors
+
+If you see timeout errors:
+
+```
+eth_call, HTTP Timeout Exception: ...
+```
+
+The endpoint may be slow or overloaded. The default timeout is 5 seconds. Consider testing during off-peak hours.
+
+### Unable to Determine Results
+
+Some methods may return inconclusive results:
+
+```
+eth_getProof, Unable to determine. Unknown error -32000: ...
+```
+
+This typically means the endpoint returned an unexpected error code. The method might be:
+- Supported but requires specific parameters
+- Behind an authentication wall
+- Restricted by the provider
+
+### No Output
+
+If the discovery produces no output:
+1. Verify the endpoint URL is correct and accessible
+2. Check if the endpoint requires authentication headers
+3. Try with the default `--clients eth` option first
+
+## Integration with Benchmarks
+
+Use discovery results to:
+
+1. **Select appropriate profiles**: Choose profiles that only use supported methods
+2. **Customize profiles**: Remove unsupported methods from custom profiles
+3. **Filter tests**: Use `--exclude-tags` to skip methods you know aren't supported
+
+```bash
+# First discover what's supported
+chainbench discover https://my-node.com --clients geth > supported_methods.txt
+
+# Then run a benchmark excluding debug methods if they're not supported
+chainbench start --profile ethereum.general \
+  --target https://my-node.com \
+  --exclude-tags debug,trace \
+  --headless --autoquit
+```

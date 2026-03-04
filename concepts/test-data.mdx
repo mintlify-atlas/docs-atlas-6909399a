@@ -1,0 +1,235 @@
+---
+title: Test Data
+description: Understand how Chainbench generates and manages test data for benchmarks
+---
+
+## Overview
+
+Chainbench fetches real blockchain data before starting tests to use as parameters for RPC method calls. This ensures that benchmarks use realistic data patterns and valid addresses, transaction hashes, and block numbers from the target blockchain.
+
+## How Test Data Works
+
+Before spawning users, Chainbench:
+
+1. Connects to the blockchain node
+2. Fetches the chain ID to identify the network
+3. Determines the block range to fetch based on configuration
+4. Retrieves blocks with transaction data
+5. Extracts useful information (addresses, tx hashes, block hashes, etc.)
+6. Stores this data in memory for use during the test
+
+<Info>
+Test data is fetched once before the test starts and shared across all workers. This improves consistency and makes benchmarks more comparable across runs.
+</Info>
+
+## Test Data Sizes
+
+You can control how much test data is generated using the `--size` flag:
+
+| Size | Blocks  | Use Case |
+|------|---------|----------|
+| XS   | 10      | Quick validation tests |
+| S    | 100     | Default - suitable for most tests |
+| M    | 1,000   | More data variety |
+| L    | 10,000  | Extensive testing |
+| XL   | 100,000 | Maximum variety (longer generation time) |
+
+### Usage Example
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --size M \
+  --target https://node-url \
+  --headless \
+  --autoquit
+```
+
+<Note>
+Larger data sizes result in longer test data generation times but provide more variety in test parameters. For most benchmarks, size S (default) is sufficient.
+</Note>
+
+## Block Range Configuration
+
+Chainbench determines which blocks to fetch based on several factors:
+
+### Default Behavior
+
+For each supported network, Chainbench has a configured starting block to avoid fetching from genesis:
+
+```python
+# Example from chainbench/test_data/evm.py
+DATA = {
+    1: {  # Ethereum Mainnet
+        "name": "ethereum-mainnet",
+        "start_block": 10000000,  # Start from block 10M
+        "contract_addresses": [...]
+    },
+    56: {  # BSC Mainnet
+        "name": "bsc-mainnet",
+        "start_block": 20000000,  # Start from block 20M
+        "contract_addresses": [...]
+    },
+}
+```
+
+The end block defaults to the latest block on the chain.
+
+### Custom Block Range
+
+You can specify a custom block range:
+
+```bash
+chainbench start --profile evm.light \
+  --start-block 15000000 \
+  --end-block 15001000 \
+  --size S \
+  --target https://node-url
+```
+
+<Accordion title="Block Range Selection Logic">
+
+The test data system selects blocks using this logic:
+
+1. If `--start-block` and `--end-block` are provided, use those values
+2. If `--use-latest-blocks` is set, ignore custom range and use latest blocks
+3. Otherwise, use the network's default start block and latest block as end
+4. Validate that the range is valid and within the node's available history
+
+</Accordion>
+
+## Using Latest Blocks
+
+For nodes with limited history (e.g., running in fast sync mode), use the `--use-latest-blocks` flag:
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --size S \
+  --use-latest-blocks \
+  --target https://node-url \
+  --headless \
+  --autoquit
+```
+
+With `--use-latest-blocks`:
+- Chainbench fetches the latest N blocks (N = size)
+- A background process continuously updates test data with new blocks
+- Ensures all test data references are within the node's available history
+
+<Tip>
+If your node only keeps the last 128 blocks, use `--use-latest-blocks --size XS` to ensure all data references are valid.
+</Tip>
+
+## Dynamic Parameters
+
+Chainbench uses parameter factories to generate realistic RPC call parameters from the test data.
+
+### Available Data
+
+For EVM chains, test data includes:
+
+- **Block numbers**: Random block numbers from the fetched range
+- **Block hashes**: Hashes of fetched blocks
+- **Transaction hashes**: Hashes from transactions in fetched blocks
+- **Addresses**: Both `from` and `to` addresses from transactions (up to 100 per block)
+- **Contract addresses**: Known contract addresses for the network
+
+### Parameter Factories
+
+Profiles use parameter factories to generate realistic call parameters:
+
+```python
+from chainbench.util.rng import get_rng
+
+# Random block number with full transaction details
+params = self._block_params_factory()
+# Returns: ["0x1a2b3c", True]
+
+# Random transaction hash
+params = self._transaction_by_hash_params_factory(get_rng())
+# Returns: ["0xabc123..."]
+
+# Random address with latest block tag
+params = self._get_balance_params_factory(get_rng())
+# Returns: ["0x742d35Cc...", "latest"]
+```
+
+<Info>
+Parameter factories use a seeded random number generator (`get_rng()`) to ensure consistency across runs and workers.
+</Info>
+
+## Reference URL
+
+You can fetch test data from a different node than the one being tested:
+
+```bash
+chainbench start --profile evm.light \
+  --target https://node-to-test \
+  --ref-url https://reference-node \
+  --users 50
+```
+
+This is useful when:
+- Testing a new node that doesn't have historical data yet
+- The node under test has limited archive access
+- You want consistent test data across multiple test runs
+
+## Network-Specific Data
+
+Chainbench includes predefined contract addresses for popular tokens on each network:
+
+```python
+# Example: Ethereum Mainnet contracts
+contract_addresses = [
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7",  # USDT
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",  # USDC
+    "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",  # WBTC
+    # ...
+]
+```
+
+These are used for `eth_call` and other contract-related operations.
+
+## Data Consistency
+
+<Accordion title="How Chainbench Ensures Consistency">
+
+Chainbench uses several techniques to ensure consistent benchmarks:
+
+1. **Seeded RNG**: Each parameter factory uses a function-specific random seed
+2. **Shared data**: All workers use the same test data
+3. **Deterministic selection**: Same random seed produces same data selection
+4. **Fixed block range**: Unless using `--use-latest-blocks`, the block range is fixed
+
+This makes benchmark results more comparable across runs and helps identify performance changes.
+
+</Accordion>
+
+## Example: Complete Test Data Workflow
+
+```bash
+# Step 1: Chainbench connects and identifies the network
+# Fetches chain ID: 1 (Ethereum Mainnet)
+
+# Step 2: Determines block range
+# Start: 10,000,000 (network default)
+# End: 18,500,000 (latest block)
+# With --size S, will fetch 100 random blocks from this range
+
+# Step 3: Fetches blocks with transactions
+# Extracts:
+# - 100 block numbers and hashes
+# - Transaction hashes from those blocks
+# - Addresses (from/to) from transactions
+
+# Step 4: Test runs
+# Each RPC call uses random data from the fetched set
+# eth_getBlockByNumber uses random block number
+# eth_getTransactionByHash uses random tx hash
+# eth_getBalance uses random address
+```
+
+<Tip>
+Monitor test data generation progress in the console output. If generation takes too long, consider using a smaller size or a more specific block range.
+</Tip>

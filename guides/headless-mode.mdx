@@ -1,0 +1,200 @@
+---
+title: Headless Mode
+description: Run automated load tests without a graphical interface using Chainbench's headless mode
+---
+
+Headless mode allows you to run Chainbench tests without a web UI, making it ideal for automated testing, CI/CD pipelines, and remote server deployments.
+
+## Basic Headless Test
+
+Add the `--headless` flag to run without the web interface:
+
+```bash
+chainbench start --profile bsc.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless
+```
+
+This runs a load test for BSC with:
+- 4 worker processes
+- 100 simulated users
+- 1 hour duration
+- No web UI
+
+<Note>
+In headless mode, you must specify `--users`, `--test-time`, and other parameters via command-line flags. The web interface for adjusting these values will not be available.
+</Note>
+
+## Automatic Termination with Autoquit
+
+The `--autoquit` flag tells Chainbench to automatically exit after the test completes:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless --autoquit
+```
+
+<Tip>
+Always use `--autoquit` with `--headless` for automated testing environments. This ensures the process terminates cleanly after the test finishes.
+</Tip>
+
+## Running Tests on Remote Servers
+
+When running tests on remote servers, use `nohup` to prevent the process from terminating when you disconnect:
+
+```bash
+nohup chainbench start --profile bsc.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless --autoquit &
+```
+
+This command:
+- Runs the process in the background (`&`)
+- Prevents termination on disconnect (`nohup`)
+- Automatically quits when the test completes (`--autoquit`)
+- Saves output to `nohup.out` by default
+
+<Steps>
+  <Step title="SSH into your remote server">
+    Connect to the server where you want to run the test
+  </Step>
+  
+  <Step title="Start the test with nohup">
+    ```bash
+    nohup chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 12h --target https://node-url --headless --autoquit &
+    ```
+  </Step>
+  
+  <Step title="Disconnect safely">
+    You can now disconnect from the server. The test will continue running.
+  </Step>
+  
+  <Step title="Monitor progress">
+    Check the output file:
+    ```bash
+    tail -f nohup.out
+    ```
+  </Step>
+</Steps>
+
+## Custom Output Location
+
+Redirect output to a specific file:
+
+```bash
+nohup chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 12h --target https://node-url --headless --autoquit > test_output.log 2>&1 &
+```
+
+## Testing Single Methods in Headless Mode
+
+Test individual RPC methods without a profile:
+
+```bash
+chainbench start eth_blockNumber --users 50 --workers 2 --test-time 12h --target https://node-url --headless --autoquit
+```
+
+This is useful for:
+- Focused performance testing of specific endpoints
+- Debugging issues with particular methods
+- Baseline measurements for comparison
+
+## Headless Mode with Monitors
+
+Monitors collect additional metrics during tests and only work in headless mode:
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 12h --target https://node-url --headless --autoquit -m sync-lag-monitor
+```
+
+The `sync-lag-monitor` tracks how far behind the node is by:
+- Collecting the latest block information
+- Comparing block timestamps to current time
+- Calculating sync lag metrics
+
+<Note>
+Monitors are separate processes that run alongside the test. Currently, the available monitor is:
+- `sync-lag-monitor`: Tracks node synchronization lag
+</Note>
+
+## Results Storage
+
+By default, results are saved to `./results/{profile_name}/{YYYY-mm-dd_HH-MM-SS}/`:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless --autoquit --results-dir /custom/path/results
+```
+
+Results include:
+- CSV files with detailed request statistics
+- HTML reports with charts and graphs
+- Exception logs
+- Summary statistics
+
+## Setting a Custom Run ID
+
+Organize test runs with custom identifiers:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless --autoquit --run-id experiment-001
+```
+
+## Headless Mode Best Practices
+
+<Warning>
+**Always test against test/dev nodes first** before running against production infrastructure.
+</Warning>
+
+### For Development Testing
+
+```bash
+chainbench start --profile evm.light --users 5 --workers 1 --test-time 30s --target https://test-node --headless --autoquit
+```
+
+- Start with minimal load (few users, 1 worker)
+- Use short test durations (30s-5m)
+- Test against development nodes
+
+### For Production Benchmarking
+
+```bash
+chainbench start --profile ethereum.general --users 100 --workers 4 --test-time 12h --target https://node-url --headless --autoquit --size M
+```
+
+- Gradually increase load over multiple test runs
+- Use appropriate test data sizes
+- Monitor node health during the test
+- Run during low-traffic periods when possible
+
+## Notifications
+
+Get notified when your test completes:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 12h --target https://node-url --headless --autoquit --notify my-test-topic
+```
+
+This sends notifications to `https://ntfy.sh/{topic}` when the test starts and finishes.
+
+<Tip>
+Subscribe to your ntfy.sh topic on your phone or desktop to receive push notifications when long-running tests complete.
+</Tip>
+
+## Troubleshooting
+
+### Test Not Starting
+
+Ensure you've provided all required parameters:
+- `--target`: Node URL
+- `--users`: Number of users
+- `--test-time`: Test duration
+
+### Process Running After Test Completes
+
+Make sure you're using the `--autoquit` flag:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless --autoquit
+```
+
+### Can't Find Results
+
+Check the console output for the results path, or specify a custom location:
+
+```bash
+chainbench start --profile ethereum.general --workers 4 --users 100 --test-time 1h --target https://node-url --headless --autoquit --results-dir ./my-results
+```

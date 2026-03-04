@@ -1,0 +1,823 @@
+---
+title: "Troubleshooting"
+description: "Common issues, solutions, and debugging tips for Chainbench"
+---
+
+This guide covers common issues you might encounter when using Chainbench and how to resolve them.
+
+## Installation Issues
+
+### Poetry Installation Fails
+
+<Accordion title="Python Version Mismatch">
+**Problem**: Error about Python version compatibility
+
+```
+The current project's Python requirement (>=3.10) is not compatible with some of the required packages Python requirement
+```
+
+**Solution**: Verify you're using Python 3.10 or later:
+
+```bash
+python --version
+# or
+python3 --version
+```
+
+If needed, install Python 3.10+:
+```bash
+# Ubuntu/Debian
+sudo apt install python3.10
+
+# macOS with Homebrew
+brew install python@3.10
+```
+
+Then ensure Poetry uses the correct version:
+```bash
+poetry env use python3.10
+poetry install
+```
+</Accordion>
+
+<Accordion title="Dependency Resolution Errors">
+**Problem**: Poetry takes too long or fails to resolve dependencies
+
+**Solution**: Try these steps:
+
+```bash
+# Clear Poetry cache
+poetry cache clear pypi --all
+
+# Update Poetry itself
+poetry self update
+
+# Use --no-cache option
+poetry install --no-cache
+
+# If still failing, try without dev dependencies first
+poetry install --without dev
+```
+</Accordion>
+
+### pip Installation Issues
+
+<Accordion title="Permission Denied">
+**Problem**: Can't write to system Python directories
+
+**Solution**: Use a virtual environment or user install:
+
+```bash
+# Option 1: Virtual environment (recommended)
+python -m venv chainbench-env
+source chainbench-env/bin/activate  # On Windows: chainbench-env\Scripts\activate
+pip install chainbench
+
+# Option 2: User install
+pip install --user chainbench
+```
+</Accordion>
+
+## Startup Issues
+
+### Target Endpoint Required
+
+<Accordion title="Missing --target Flag">
+**Problem**: 
+```
+Target is required. If running in Web UI mode you may change it later but it is needed to initialize test data.
+```
+
+**Solution**: Always specify a target endpoint:
+
+```bash
+chainbench start --profile ethereum.general --target https://your-node.com
+```
+
+The target is required because Chainbench needs to:
+1. Fetch real blockchain data for test parameters
+2. Initialize the appropriate test data structures
+3. Validate the endpoint is accessible
+</Accordion>
+
+### Profile Not Found
+
+<Accordion title="Invalid Profile Name">
+**Problem**:
+```
+Profile ethereum.invalid could not be found in /path/to/profiles.
+Use 'chainbench list profiles' to list available profiles.
+```
+
+**Solution**: List available profiles and use the exact name:
+
+```bash
+# List built-in profiles
+chainbench list profiles
+
+# List profiles in custom directory
+chainbench list profiles -d /path/to/custom/profiles
+
+# Use correct profile name
+chainbench start --profile ethereum.general --target https://your-node.com
+```
+</Accordion>
+
+### Multiple Test Data Types Detected
+
+<Accordion title="Mixed Profile Directory">
+**Problem**:
+```
+Error occurred: Multiple test data types detected.
+Specifying a directory that contains load profiles with same test data type is required
+```
+
+**Solution**: This happens when running a profile directory (without `--profile`) that contains both EVM and Solana profiles. Either:
+
+1. **Specify a profile explicitly**:
+   ```bash
+   chainbench start --profile ethereum.general --target https://eth-node.com
+   ```
+
+2. **Use a specific subdirectory**:
+   ```bash
+   chainbench start --profile-dir chainbench/profile/evm --target https://eth-node.com
+   ```
+
+3. **Use --profile-path** for a single file:
+   ```bash
+   chainbench start --profile-path /path/to/profile.py --target https://node.com
+   ```
+</Accordion>
+
+## Test Data Issues
+
+### Insufficient Block History
+
+<Accordion title="Node History Too Short">
+**Problem**: Node runs in a pruned or snap-sync mode with limited history
+
+**Symptoms**:
+- Errors about missing blocks
+- "block not found" messages in logs
+- High failure rates for historical data queries
+
+**Solution**: Use `--use-latest-blocks` flag:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://pruned-node.com \
+  --use-latest-blocks \
+  --size S \
+  --headless --autoquit
+```
+
+This:
+- Uses only recent blocks (last 100 for size S)
+- Continuously updates test data with new blocks
+- Avoids queries to pruned history
+</Accordion>
+
+<Accordion title="Custom Block Range Errors">
+**Problem**:
+```
+Both start-block and end-block are required for specifying custom block range.
+```
+or
+```
+end-block must be greater than start-block.
+```
+
+**Solution**: Provide both flags with valid values:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://node.com \
+  --start-block 1000000 \
+  --end-block 1001000 \
+  --headless --autoquit
+```
+
+<Note>
+The `--use-latest-blocks` flag overrides custom block ranges. Don't use both together.
+</Note>
+</Accordion>
+
+### Slow Test Data Generation
+
+<Accordion title="Large Data Size">
+**Problem**: Test data generation takes too long
+
+**Solution**: Start with smaller sizes and scale up:
+
+```bash
+# Start with XS (10 blocks) for testing
+chainbench start --profile ethereum.general --size XS --target https://node.com
+
+# Move to S (100 blocks) for short tests
+chainbench start --profile ethereum.general --size S --target https://node.com
+
+# Use larger sizes only for extended tests
+chainbench start --profile ethereum.general --size L --test-time 12h --target https://node.com
+```
+
+Data generation time scales with:
+- Block count (size)
+- Number of transactions per block
+- Network latency to the node
+- Complexity of the profile
+</Accordion>
+
+<Accordion title="Slow Reference Node">
+**Problem**: Test data generation is slow because the target node is slow
+
+**Solution**: Use a fast reference node for data generation:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://slow-node-to-test.com \
+  --ref-url https://fast-reference-node.com \
+  --size M \
+  --headless --autoquit
+```
+
+The `--ref-url` node is used only for fetching test data. The benchmark runs against `--target`.
+</Accordion>
+
+## Connection Issues
+
+### Timeout Errors
+
+<Accordion title="HTTP Timeouts During Tests">
+**Problem**: High rate of timeout errors in results
+
+**Symptoms**:
+```
+HTTP Timeout Exception: ...
+```
+
+**Causes**:
+- Node is overloaded
+- Network latency is too high
+- Request rate is too aggressive
+
+**Solutions**:
+
+1. **Reduce load**:
+   ```bash
+   chainbench start \
+     --profile ethereum.light \
+     --users 10 \
+     --spawn-rate 1 \
+     --target https://node.com
+   ```
+
+2. **Increase workers** for better distribution:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --users 100 \
+     --workers 8 \
+     --target https://node.com
+   ```
+
+3. **Use a lighter profile**:
+   ```bash
+   # Instead of ethereum.heavy
+   chainbench start --profile ethereum.light --target https://node.com
+   ```
+</Accordion>
+
+<Accordion title="Connection Refused">
+**Problem**: Can't connect to the target endpoint
+
+**Solution**: Verify endpoint accessibility:
+
+```bash
+# Test with curl
+curl -X POST https://your-node.com \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+
+# Check for authentication requirements
+# Some endpoints need API keys in headers or URL
+chainbench start \
+  --target https://your-node.com/YOUR-API-KEY \
+  --profile ethereum.general
+```
+
+Common issues:
+- Firewall blocking requests
+- API key required but not provided
+- Endpoint URL has typo
+- HTTPS certificate issues
+</Accordion>
+
+### Rate Limiting
+
+<Accordion title="429 Too Many Requests">
+**Problem**: Endpoint returns rate limit errors
+
+**Symptoms**:
+- HTTP 429 status codes
+- "Rate limit exceeded" messages
+- Sudden drop in successful requests
+
+**Solutions**:
+
+1. **Reduce request rate**:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --users 5 \
+     --spawn-rate 1 \
+     --target https://rate-limited-node.com
+   ```
+
+2. **Use step load shape** for gradual increase:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --shape step \
+     --users 50 \
+     --spawn-rate 5 \
+     --target https://node.com
+   ```
+
+3. **For method discovery**, the tool auto-retries with exponential backoff:
+   ```bash
+   # Discovery automatically handles 429 responses
+   chainbench discover https://rate-limited-node.com --clients eth
+   ```
+</Accordion>
+
+## Worker and Process Issues
+
+### Worker Startup Failures
+
+<Accordion title="Workers Not Starting">
+**Problem**: Workers fail to connect to master
+
+**Symptoms**:
+- Only master process starts
+- No actual load on target
+- "Waiting for workers" message persists
+
+**Solution**: Check system resources and ports:
+
+```bash
+# Verify port 5557 is available
+lsof -i :5557
+netstat -an | grep 5557
+
+# Reduce worker count if system is constrained
+chainbench start \
+  --profile ethereum.general \
+  --workers 2 \
+  --target https://node.com
+
+# Check for firewall issues (especially on cloud instances)
+sudo ufw status
+sudo firewall-cmd --list-all
+```
+</Accordion>
+
+<Accordion title="Port Already in Use">
+**Problem**: Master port 5557 is already bound
+
+**Solution**: Change the port or stop conflicting process:
+
+```bash
+# Option 1: Use different port
+chainbench start \
+  --profile ethereum.general \
+  --port 5558 \
+  --target https://node.com
+
+# Option 2: Find and stop conflicting process
+lsof -ti:5557 | xargs kill -9
+
+# Option 3: Stop previous Chainbench instances
+pkill -f chainbench
+```
+</Accordion>
+
+### Headless Mode Issues
+
+<Accordion title="Test Doesn't Auto-Quit">
+**Problem**: Test keeps running after completion in headless mode
+
+**Solution**: Use the `--autoquit` flag:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --test-time 1h \
+  --headless \
+  --autoquit \
+  --target https://node.com
+```
+
+Without `--autoquit`:
+- Master process stays running
+- Web UI remains accessible at localhost:8089
+- You must manually stop with Ctrl+C
+
+With `--autoquit`:
+- All processes terminate after test duration
+- Results are saved before exit
+- Suitable for automation and CI/CD
+</Accordion>
+
+## Monitor Issues
+
+<Accordion title="Monitors Not Starting">
+**Problem**: Monitors like sync-lag-monitor don't run
+
+**Requirements**:
+- Monitors only work in headless mode
+- Requires valid target endpoint
+
+**Solution**:
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://node.com \
+  --monitor sync-lag-monitor \
+  --headless \
+  --autoquit
+```
+
+<Warning>
+Monitors are spawned as separate processes. Check the results directory for monitor output files.
+</Warning>
+</Accordion>
+
+## Database Integration Issues
+
+### TimescaleDB Connection Failures
+
+<Accordion title="Missing Database Parameters">
+**Problem**:
+```
+PG connection parameters are required when --timescale flag is used:
+pg_host, pg_port, pg_username, pg_password
+```
+
+**Solution**: Provide all required parameters:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://node.com \
+  --timescale \
+  --pg-host localhost \
+  --pg-port 5432 \
+  --pg-username postgres \
+  --pg-password your_password \
+  --headless --autoquit
+```
+</Accordion>
+
+<Accordion title="Can't Connect to Database">
+**Problem**: Chainbench can't reach PostgreSQL/TimescaleDB
+
+**Troubleshooting steps**:
+
+```bash
+# 1. Verify database is running
+docker ps | grep timescale
+# or
+sudo systemctl status postgresql
+
+# 2. Test connection manually
+psql -h localhost -U postgres -c "SELECT 1;"
+
+# 3. Check firewall
+sudo ufw status
+sudo firewall-cmd --list-all
+
+# 4. Verify TimescaleDB extension
+psql -d postgres -c "SELECT * FROM pg_extension WHERE extname = 'timescaledb';"
+
+# 5. Check pg_hba.conf allows connections
+sudo cat /etc/postgresql/*/main/pg_hba.conf | grep -v "^#"
+```
+</Accordion>
+
+## Performance Issues
+
+### High CPU Usage
+
+<Accordion title="System Overload">
+**Problem**: Chainbench consumes excessive CPU
+
+**Causes**:
+- Too many workers for available cores
+- Very high request rate
+- Complex profile with heavy processing
+
+**Solutions**:
+
+1. **Match workers to CPU cores**:
+   ```bash
+   # On 4-core system
+   chainbench start \
+     --profile ethereum.general \
+     --workers 4 \
+     --target https://node.com
+   ```
+
+2. **Reduce user count**:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --users 50 \
+     --workers 2 \
+     --target https://node.com
+   ```
+
+3. **Use simpler profile**:
+   ```bash
+   # Light profile has fewer methods
+   chainbench start --profile ethereum.light --target https://node.com
+   ```
+</Accordion>
+
+### High Memory Usage
+
+<Accordion title="Memory Exhaustion">
+**Problem**: Chainbench uses too much RAM
+
+**Causes**:
+- Large test data size
+- Many workers
+- Long-running test accumulating data
+
+**Solutions**:
+
+1. **Use smaller data size**:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --size S \
+     --target https://node.com
+   ```
+
+2. **Reduce worker count**:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --workers 2 \
+     --target https://node.com
+   ```
+
+3. **Use --use-latest-blocks** to avoid loading historical data:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --use-latest-blocks \
+     --size S \
+     --target https://node.com
+   ```
+</Accordion>
+
+## Results and Output Issues
+
+<Accordion title="Results Directory Permissions">
+**Problem**: Can't write results to directory
+
+**Solution**: Ensure write permissions:
+
+```bash
+# Check permissions
+ls -la results/
+
+# Fix permissions
+chmod -R u+w results/
+
+# Or specify different directory
+chainbench start \
+  --profile ethereum.general \
+  --target https://node.com \
+  --results-dir /tmp/chainbench-results
+```
+</Accordion>
+
+<Accordion title="Missing Results Files">
+**Problem**: Expected CSV/JSON files not created
+
+**Causes**:
+- Test didn't run (workers failed to start)
+- Test was interrupted (Ctrl+C before completion)
+- Insufficient disk space
+
+**Verification**:
+```bash
+# Check results directory structure
+ls -R results/
+
+# Verify disk space
+df -h .
+
+# Check Chainbench logs
+grep -i error results/*/locust.log
+```
+
+Results are saved to:
+```
+results/
+  └── {profile_name}/
+      └── {timestamp}/
+          ├── stats.csv
+          ├── stats_history.csv
+          ├── failures.csv
+          └── exceptions.csv
+```
+</Accordion>
+
+## Batch Mode Issues
+
+<Accordion title="Batch Requests Failing">
+**Problem**: Errors when using `--batch` flag
+
+**Symptoms**:
+- Higher error rates with batch mode
+- "Invalid batch request" errors
+- Some methods work, others don't
+
+**Causes**:
+- Not all RPC endpoints support batch requests
+- Batch size too large for endpoint
+
+**Solutions**:
+
+1. **Reduce batch size**:
+   ```bash
+   chainbench start \
+     --profile ethereum.general \
+     --batch \
+     --batch-size 5 \
+     --target https://node.com
+   ```
+
+2. **Test without batch first**:
+   ```bash
+   # Run without --batch to establish baseline
+   chainbench start \
+     --profile ethereum.general \
+     --target https://node.com
+   ```
+
+3. **Check endpoint batch support**:
+   ```bash
+   # Test batch request manually
+   curl -X POST https://your-node.com \
+     -H "Content-Type: application/json" \
+     -d '[{"jsonrpc":"2.0","method":"eth_blockNumber","id":1},{"jsonrpc":"2.0","method":"eth_chainId","id":2}]'
+   ```
+</Accordion>
+
+## Debug and Trace Methods
+
+<Accordion title="Debug Methods Excluded">
+**Problem**: Debug/trace methods not running even though they're in the profile
+
+**Explanation**: By default, methods tagged with `debug` or `trace` are excluded
+
+**Solution**: Use the `--debug-trace-methods` flag:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --debug-trace-methods \
+  --users 10 \
+  --target https://archive-node.com
+```
+
+<Warning>
+Debug and trace methods can be extremely resource-intensive on nodes. Use lower user counts and ensure the target node supports these methods.
+</Warning>
+</Accordion>
+
+## Notification Issues
+
+<Accordion title="Not Receiving Notifications">
+**Problem**: No notifications appear despite using `--notify`
+
+**Troubleshooting**:
+
+1. **Verify topic name matches**:
+   ```bash
+   # In Chainbench
+   chainbench start --notify my-test-topic --target https://node.com
+   
+   # In browser/app
+   # Subscribe to: my-test-topic (exact match)
+   ```
+
+2. **Test manually**:
+   ```bash
+   curl -d "Test message" https://ntfy.sh/my-test-topic
+   ```
+
+3. **Check headless mode**:
+   - "Test started" notifications only appear in headless mode
+   - "Test finished" notifications always appear
+
+4. **Verify network access**:
+   ```bash
+   curl -I https://ntfy.sh
+   ```
+</Accordion>
+
+## Code Quality Issues
+
+<Accordion title="Pre-commit Hook Failures">
+**Problem**: Commit fails with formatting errors
+
+**Solution**: Run formatting and checks before committing:
+
+```bash
+# Format code
+poetry run black .
+poetry run isort .
+
+# Check for issues
+poetry run flake8
+poetry run mypy .
+
+# Or run all pre-commit hooks
+poetry run pre-commit run --all-files
+```
+</Accordion>
+
+## Getting Additional Help
+
+### Enable Verbose Logging
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://node.com \
+  --log-level DEBUG \
+  --headless
+```
+
+Log levels: `DEBUG`, `INFO` (default), `WARNING`, `ERROR`
+
+### Check Locust Logs
+
+Results directory contains detailed logs:
+
+```bash
+# View master log
+tail -f results/ethereum.general/*/locust.log
+
+# Search for errors
+grep -i error results/ethereum.general/*/locust.log
+grep -i exception results/ethereum.general/*/locust.log
+```
+
+### Useful Diagnostic Commands
+
+```bash
+# List all available commands
+chainbench --help
+
+# List supported methods
+chainbench list methods
+
+# List available profiles
+chainbench list profiles
+
+# List available clients for discovery
+chainbench list clients
+
+# Check Chainbench version
+chainbench --version
+
+# Discover endpoint capabilities
+chainbench discover https://your-node.com --clients eth
+```
+
+### Report Issues
+
+If you encounter a bug or need help:
+
+1. **GitHub Issues**: [chainstacklabs/chainbench/issues](https://github.com/chainstacklabs/chainbench/issues)
+2. **Provide**:
+   - Chainbench version (`chainbench --version`)
+   - Full command used
+   - Error messages and logs
+   - Python version (`python --version`)
+   - Operating system
+
+### Community Resources
+
+- **Documentation**: Review profile creation guide (docs/PROFILE.md)
+- **Examples**: Check built-in profiles in `chainbench/profile/`
+- **Contributing**: See CONTRIBUTING.md for development guidelines

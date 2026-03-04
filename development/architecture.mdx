@@ -1,0 +1,309 @@
+---
+title: Architecture
+description: Understanding Chainbench's architecture and components
+---
+
+Chainbench is built on top of Locust, a popular load testing framework. It extends Locust with blockchain-specific functionality, including test data management, user classes for different protocols, and customizable load profiles.
+
+## Project Structure
+
+The Chainbench codebase is organized into several key modules:
+
+```
+chainbench/
+├── user/                 # User classes and protocol implementations
+│   ├── protocol/         # Protocol-specific implementations
+│   │   ├── evm.py       # EVM/Ethereum user classes
+│   │   ├── solana.py    # Solana user classes
+│   │   ├── ethereum.py  # Ethereum Beacon Chain
+│   │   └── starknet.py  # StarkNet implementation
+│   ├── jsonrpc.py       # JSON-RPC base user class
+│   ├── http.py          # HTTP base user class
+│   └── wss.py           # WebSocket support
+├── test_data/           # Test data management system
+│   ├── blockchain.py    # Base blockchain data structures
+│   ├── evm.py          # EVM-specific test data
+│   ├── solana.py       # Solana-specific test data
+│   └── starknet.py     # StarkNet-specific test data
+├── profile/             # Load testing profiles
+│   ├── evm/            # Generic EVM profiles
+│   ├── ethereum/       # Ethereum-specific profiles
+│   ├── solana/         # Solana-specific profiles
+│   └── [network]/      # Network-specific profiles
+├── util/                # Utility functions and helpers
+├── tools/               # Additional tools (discovery, etc.)
+└── shapes/              # Load pattern shapes
+```
+
+## Core Components
+
+### User Classes
+
+Chainbench uses Locust's User concept to simulate blockchain clients making RPC requests. The user class hierarchy provides protocol-specific implementations:
+
+<Accordion title="Base User Classes">
+  - **HttpUser**: Base class for HTTP-based interactions
+  - **JrpcHttpUser**: Extends HttpUser with JSON-RPC support
+    - Handles JSON-RPC request/response formatting
+    - Validates JSON-RPC responses
+    - Supports batch requests
+    - Manages error code exclusions
+</Accordion>
+
+<Accordion title="Protocol-Specific Users">
+  - **EvmUser**: EVM-compatible chains (Ethereum, BSC, Polygon, etc.)
+    - Implements all standard Ethereum JSON-RPC methods
+    - Supports debug and trace methods (tagged)
+    - Includes ERC-20 token interactions
+  - **SolanaUser**: Solana blockchain
+    - Implements Solana JSON-RPC methods
+    - Handles Solana-specific data structures
+  - **EthBeaconUser**: Ethereum Consensus Layer (Beacon Chain)
+    - Implements Beacon Chain API methods
+  - **StarkNetUser**: StarkNet L2
+    - Implements StarkNet-specific methods
+</Accordion>
+
+### User Class Methods
+
+Each user class defines methods that correspond to RPC calls. Methods are organized into two types:
+
+1. **RPC Call Methods**: Return `RpcCall` objects (e.g., `eth_block_number()`)
+2. **Task Methods**: Execute the RPC calls (e.g., `eth_block_number_task()`)
+
+```python
+class EvmUser(EvmRpcMethods):
+    def eth_block_number(self) -> RpcCall:
+        return RpcCall(method="eth_blockNumber")
+    
+    def eth_block_number_task(self) -> None:
+        self.make_rpc_call(self.eth_block_number())
+```
+
+## Test Data System
+
+The test data system is one of Chainbench's key features, enabling realistic load testing with actual blockchain data.
+
+<Accordion title="Data Collection">
+  Test data is collected before benchmarks begin:
+  - Fetches blocks from the target node (or a reference node)
+  - Extracts transactions, accounts, and hashes
+  - Stores data in memory for fast random access
+  - Supports different data sizes (XS, S, M, L, XL)
+</Accordion>
+
+<Accordion title="Data Structures">
+  **BlockchainData**: Generic container for blockchain data
+  - Stores blocks, block numbers, and block range
+  - Manages data size limits
+  - Provides JSON serialization
+
+  **Block Types**: Protocol-specific block structures
+  - **EvmBlock**: Contains transactions, accounts, hashes
+  - **SolanaBlock**: Solana-specific block data
+  - **StarkNetBlock**: StarkNet-specific block data
+</Accordion>
+
+<Accordion title="Data Sizes">
+  Chainbench supports different data collection sizes:
+  
+  | Size | Blocks Collected |
+  | --- | --- |
+  | XS | 10 blocks |
+  | S | 100 blocks |
+  | M | 1,000 blocks |
+  | L | 10,000 blocks |
+  | XL | 100,000 blocks |
+  
+  Specify size with the `--size` flag:
+  ```bash
+  chainbench start --profile evm.light --size XS --target https://node
+  ```
+</Accordion>
+
+### Test Data Features
+
+<Note>
+  For development, always start with `--size XS` to minimize initialization time and memory usage.
+</Note>
+
+**Block Range Selection**:
+- Custom range: `--start-block` and `--end-block`
+- Latest blocks: `--use-latest-blocks` (useful for nodes with limited history)
+- Network defaults: Each network has a default starting block
+
+**Random Data Access**:
+- `get_random_block()`: Returns a random block from collected data
+- `get_random_tx_hash()`: Returns a random transaction hash
+- `get_random_account()`: Returns a random account address
+- `get_random_block_number()`: Returns a random block number
+
+**Reference Node**:
+Use `--ref-url` to collect test data from a different node than the target:
+```bash
+chainbench start --target https://test-node --ref-url https://mainnet-archive --profile evm.heavy
+```
+
+## Load Profiles
+
+Profiles define which RPC methods to test and their relative weights. They are Python files that specify a user class with weighted RPC calls.
+
+### Profile Structure
+
+```python
+from locust import constant_pacing
+from chainbench.user import EvmUser
+
+class EvmLightProfile(EvmUser):
+    wait_time = constant_pacing(1)  # 1 second between requests
+    
+    rpc_calls = {
+        EvmUser.eth_get_transaction_receipt: 1,
+        EvmUser.eth_block_number: 1,
+        EvmUser.eth_get_balance: 1,
+        EvmUser.eth_chain_id: 1,
+        EvmUser.eth_get_block_by_number: 1,
+        EvmUser.eth_get_transaction_by_hash: 1,
+        EvmUser.web3_client_version: 1,
+    }
+    
+    tasks = EvmUser.expand_tasks(rpc_calls)
+```
+
+<Accordion title="Profile Components">
+  - **wait_time**: Locust wait time function (controls pacing)
+  - **rpc_calls**: Dictionary mapping methods to weights
+  - **tasks**: Expanded task list for Locust
+  - Higher weights = more frequent execution
+</Accordion>
+
+<Accordion title="Built-in Profiles">
+  Chainbench includes several pre-built profiles:
+  
+  **Generic EVM**:
+  - `evm.light`: Common read operations
+  - `evm.heavy`: Complex and expensive operations
+  - `evm.get_logs`: Focused on log queries
+  - `evm.debug_trace`: Debug and trace methods
+  - `evm.all`: All available methods
+  
+  **Network-Specific**:
+  - `ethereum.general`: Ethereum mainnet focus
+  - `ethereum.consensus`: Beacon chain methods
+  - `solana.general`: Solana-specific operations
+  - And many more for BSC, Polygon, Arbitrum, etc.
+</Accordion>
+
+### Creating Custom Profiles
+
+When creating custom profiles:
+
+1. Place them in `chainbench/profile/<network>/`
+2. Follow existing profile structure
+3. Include docstrings explaining the profile purpose
+4. Test with `--size XS` first
+5. Validate against multiple node types when applicable
+
+## Locust Integration
+
+Chainbench leverages Locust's distributed load testing capabilities:
+
+### Master-Worker Architecture
+
+```bash
+chainbench start --profile evm.light --workers 8 --users 100
+```
+
+This creates:
+- 1 master process (coordinates testing and aggregates results)
+- 8 worker processes (execute the actual load testing)
+- 100 virtual users (distributed across workers)
+
+<Accordion title="How It Works">
+  1. **Master Process**: Spawned first, coordinates workers
+  2. **Worker Processes**: Connect to master, execute tasks
+  3. **User Distribution**: Users evenly distributed across workers
+  4. **Result Aggregation**: Master collects and aggregates metrics
+  5. **Monitors**: Optional monitoring processes run in parallel
+</Accordion>
+
+### Task Tagging System
+
+Chainbench uses Locust's tagging to categorize methods:
+
+```python
+@tag("debug")
+def debug_trace_transaction_task(self) -> None:
+    self.make_rpc_call(self.debug_trace_transaction())
+
+@tag("trace")
+def trace_block_task(self) -> None:
+    self.make_rpc_call(self.trace_block())
+```
+
+**Tag Filtering**:
+- `--debug-trace-methods`: Enable debug/trace tagged methods
+- `--exclude-tags`: Exclude specific tags
+- Default: debug and trace methods are excluded
+
+**Built-in Tags**:
+- `debug`: Debug namespace methods
+- `trace`: Trace namespace methods  
+- `single`: Single method testing mode
+- `batch`: Batch request mode
+- `batch_single`: Batch requests of same method
+
+## Batch Requests
+
+Chainbench supports JSON-RPC batch requests for improved efficiency:
+
+```bash
+chainbench start --profile evm.light --batch --batch-size 10
+```
+
+<Accordion title="Batch Request Modes">
+  - **Regular batch** (`--batch`): Random mix of weighted methods
+  - **Single method batch** (`--batch` with method): Same method repeated
+  - **Batch size** (`--batch-size`): Number of requests per batch (default: 10)
+</Accordion>
+
+## Load Shapes
+
+Load shapes control how users are spawned over time:
+
+```bash
+chainbench start --profile evm.light --shape spike
+```
+
+Available shapes:
+- **step**: Gradually increase load in steps
+- **spike**: Sudden spike in traffic
+
+Shapes are defined in `chainbench/shapes/` and use Locust's LoadTestShape class.
+
+## Method Discovery
+
+The discovery tool tests which RPC methods are available on a node:
+
+```bash
+chainbench discover https://node-url --clients geth,erigon
+```
+
+This helps identify:
+- Which methods are implemented
+- Which methods return errors
+- Node client compatibility
+
+## Extension Points
+
+To extend Chainbench:
+
+1. **New Protocol**: Create a new user class in `user/protocol/`
+2. **New Test Data**: Extend `TestData` in `test_data/`
+3. **New Profile**: Add profile file to `profile/`
+4. **New Shape**: Add shape class to `shapes/`
+5. **New Monitor**: Add monitor function to `util/monitor.py`
+
+<Note>
+  All extensions should follow existing patterns and maintain compatibility with Locust's architecture.
+</Note>

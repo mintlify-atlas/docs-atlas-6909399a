@@ -1,0 +1,247 @@
+---
+title: Ethereum
+description: Load test Ethereum nodes with execution and consensus layer profiles
+---
+
+Chainbench provides comprehensive testing profiles for Ethereum, including both execution layer (JSON-RPC) and consensus layer (Beacon API) endpoints.
+
+## Overview
+
+Ethereum support in Chainbench includes:
+- **Execution Layer**: Standard JSON-RPC methods for interacting with Ethereum nodes
+- **Consensus Layer**: Beacon Chain API for testing Ethereum consensus clients
+- **WebSocket Subscriptions**: Real-time event streaming for newHeads, logs, and pending transactions
+- **Debug/Trace Methods**: Advanced node debugging and transaction tracing capabilities
+
+## Available Profiles
+
+### ethereum.general
+
+The general Ethereum profile simulates typical production workload based on real-world usage patterns.
+
+<CodeGroup>
+```python Method Distribution
+rpc_calls = {
+    EvmUser.eth_call: 259,
+    EvmUser.eth_get_transaction_receipt: 62,
+    EvmUser.eth_block_number: 49,
+    EvmUser.eth_get_balance: 31,
+    EvmUser.eth_chain_id: 28,
+    EvmUser.eth_get_block_by_number: 23,
+    EvmUser.eth_get_transaction_by_hash: 21,
+    EvmUser.eth_get_logs: 13,
+    EvmUser.trace_transaction: 8,
+    EvmUser.web3_client_version: 5,
+}
+```
+</CodeGroup>
+
+### ethereum.consensus
+
+Tests Ethereum Beacon Chain API endpoints for consensus layer clients.
+
+<CodeGroup>
+```python Method Distribution
+rpc_calls = {
+    EthBeaconUser.eth_v1_beacon_states_validators_random_ids_task: 698,
+    EthBeaconUser.eth_v1_beacon_states_validators_head_task: 23,
+    EthBeaconUser.eth_v1_beacon_states_head_committees_random_epoch_task: 10,
+    EthBeaconUser.eth_v1_beacon_states_validators_random_status_task: 10,
+    EthBeaconUser.eth_v1_beacon_states_random_state_id_finality_checkpoints_task: 10,
+    EthBeaconUser.eth_v2_beacon_blocks_random_block_id_task: 8,
+    EthBeaconUser.eth_v2_beacon_blocks_head_task: 6,
+    EthBeaconUser.eth_v1_beacon_headers_head_task: 4,
+    EthBeaconUser.eth_v1_config_spec_task: 3,
+    EthBeaconUser.eth_v1_node_health_task: 2,
+}
+```
+</CodeGroup>
+
+### ethereum.subscriptions
+
+Tests WebSocket subscriptions for real-time event streaming.
+
+<CodeGroup>
+```python Subscriptions
+subscriptions = [
+    EthSubscribe(["newHeads"]),
+    # logs subscription for approve method signature
+    EthSubscribe(["logs", {"topics": ["0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"]}]),
+    EthSubscribe(["newPendingTransactions"]),
+]
+```
+</CodeGroup>
+
+## Supported RPC Methods
+
+### Standard JSON-RPC Methods
+
+<Tabs>
+  <Tab title="Read Methods">
+    - `eth_blockNumber` - Get latest block number
+    - `eth_getBlockByNumber` - Fetch block data by number
+    - `eth_getBlockByHash` - Fetch block data by hash
+    - `eth_getTransactionByHash` - Get transaction details
+    - `eth_getTransactionReceipt` - Get transaction receipt
+    - `eth_getBalance` - Get account balance
+    - `eth_getCode` - Get contract bytecode
+    - `eth_getTransactionCount` - Get account nonce
+    - `eth_call` - Execute contract call without creating transaction
+    - `eth_getLogs` - Get event logs
+  </Tab>
+  <Tab title="Network Methods">
+    - `eth_chainId` - Get chain ID
+    - `eth_syncing` - Get sync status
+    - `eth_gasPrice` - Get current gas price
+    - `eth_feeHistory` - Get historical fee data
+    - `eth_maxPriorityFeePerGas` - Get priority fee estimate
+    - `net_version` - Get network version
+    - `net_listening` - Get listening status
+    - `net_peerCount` - Get peer count
+    - `web3_clientVersion` - Get client version
+  </Tab>
+  <Tab title="Debug/Trace Methods">
+    - `debug_traceTransaction` - Trace transaction execution
+    - `debug_traceBlockByNumber` - Trace all transactions in block
+    - `debug_traceBlockByHash` - Trace block by hash
+    - `debug_traceCall` - Trace arbitrary call
+    - `debug_getRawReceipts` - Get raw receipts
+    - `trace_transaction` - Get transaction trace
+    - `trace_block` - Get block traces
+    - `trace_replayTransaction` - Replay transaction
+    - `trace_replayBlockTransactions` - Replay block transactions
+    - `trace_call` - Trace call
+    - `trace_callMany` - Trace multiple calls
+    - `trace_filter` - Filter traces
+  </Tab>
+</Tabs>
+
+### Beacon Chain API Methods
+
+- `eth/v1/beacon/genesis` - Get genesis information
+- `eth/v1/beacon/states/{state_id}/validators` - Get validator data
+- `eth/v2/beacon/blocks/{block_id}` - Get beacon block
+- `eth/v1/beacon/headers` - Get beacon headers
+- `eth/v1/beacon/states/{state_id}/committees` - Get committees
+- `eth/v1/config/spec` - Get configuration spec
+- `eth/v1/node/health` - Get node health
+- `eth/v1/node/version` - Get node version
+
+## Example Commands
+
+### Test Execution Layer
+
+<CodeGroup>
+```bash General Profile
+chainbench start --profile ethereum.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://ethereum-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash Single Method
+chainbench start eth_blockNumber \
+  --users 20 \
+  --workers 2 \
+  --test-time 30m \
+  --target https://ethereum-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash With Debug/Trace Methods
+chainbench start --profile ethereum.general \
+  --users 10 \
+  --workers 1 \
+  --test-time 1h \
+  --target https://ethereum-node-url \
+  --debug-trace-methods \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Test Consensus Layer
+
+<CodeGroup>
+```bash Beacon Chain Profile
+chainbench start --profile ethereum.consensus \
+  --users 30 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://beacon-node-url \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Test WebSocket Subscriptions
+
+<CodeGroup>
+```bash Subscriptions Profile
+chainbench start --profile ethereum.subscriptions \
+  --users 10 \
+  --workers 1 \
+  --test-time 30m \
+  --target wss://ethereum-node-url \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+## Ethereum-Specific Features
+
+### Test Data Generation
+
+Chainbench automatically fetches real blockchain data for dynamic test parameters:
+- Block numbers and hashes
+- Transaction hashes
+- Contract addresses
+- Account addresses
+- ERC20 token contracts
+
+### Archive Node Testing
+
+For archive nodes with full historical data, use custom block ranges:
+
+```bash
+chainbench start --profile ethereum.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://archive-node-url \
+  --start-block 1000000 \
+  --end-block 2000000 \
+  --headless \
+  --autoquit
+```
+
+### Latest Blocks Mode
+
+For nodes with limited history (e.g., snap sync):
+
+```bash
+chainbench start --profile ethereum.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://ethereum-node-url \
+  --use-latest-blocks \
+  --size S \
+  --headless \
+  --autoquit
+```
+
+<Note>
+When using `--use-latest-blocks`, Chainbench runs a background process to continuously update test data with the latest blocks.
+</Note>
+
+## Related Resources
+
+- [Generic EVM Profiles](/blockchains/evm)
+- [Creating Custom Profiles](/guides/custom-profiles)
+- [Ethereum JSON-RPC Specification](https://ethereum.github.io/execution-apis/api-documentation/)
+- [Beacon Chain API Specification](https://ethereum.github.io/beacon-APIs/)

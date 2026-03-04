@@ -1,0 +1,176 @@
+---
+title: Running Tests
+description: Learn how to execute basic load tests with Chainbench and common testing patterns
+---
+
+Chainbench provides flexible options for running blockchain infrastructure benchmarks. This guide covers the basics of executing tests and common patterns.
+
+## Basic Test Execution
+
+To start a load test, use the `chainbench start` command with your desired configuration:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://your-node-url
+```
+
+<Note>
+If you installed Chainbench using Poetry, prefix all commands with `poetry run`:
+```bash
+poetry run chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://your-node-url
+```
+</Note>
+
+## Testing Individual Methods
+
+You can test a specific RPC method instead of a full profile:
+
+```bash
+chainbench start eth_blockNumber --users 50 --workers 2 --test-time 12h --target https://node-url --headless --autoquit
+```
+
+This runs a load test with only `eth_blockNumber` method calls using the default test data size (S).
+
+<Steps>
+  <Step title="List available methods">
+    To see which methods are supported:
+    ```bash
+    chainbench list methods
+    ```
+  </Step>
+  
+  <Step title="Choose your method">
+    Select a method from the list and use it as the argument to `chainbench start`
+  </Step>
+  
+  <Step title="Run the test">
+    Execute your test with the desired parameters for users, workers, and test duration
+  </Step>
+</Steps>
+
+## Using Profiles
+
+Profiles allow you to test multiple methods with realistic traffic distributions:
+
+```bash
+chainbench start --profile bsc.general --users 50 --workers 2 --test-time 12h --target https://node-url --headless --autoquit
+```
+
+### Built-in Profiles
+
+Chainbench includes profiles for:
+- Ethereum (`ethereum.general`)
+- Binance Smart Chain (`bsc.general`)
+- Polygon (`polygon.general`)
+- Solana (`solana.general`)
+- Avalanche, Arbitrum, Base, Fantom, Gnosis, Optimism, Ronin, and more
+- Generic EVM profiles: `evm.light` and `evm.heavy`
+
+<Tip>
+List all available profiles with:
+```bash
+chainbench list profiles
+```
+</Tip>
+
+## Common Parameters
+
+### Essential Options
+
+- `--users` or `-u`: Number of simulated users (default: 100)
+- `--workers` or `-w`: Number of worker threads (default: 8)
+- `--test-time` or `-t`: Duration of the test (e.g., `1h`, `30m`, `12h`)
+- `--target`: The blockchain node URL to test
+- `--spawn-rate` or `-r`: Users spawned per second (default: 10)
+
+### Test Data Configuration
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --size L --headless --autoquit
+```
+
+Available test data sizes:
+
+| Size | Blocks  |
+|------|--------|
+| XS   | 10     |
+| S    | 100    |
+| M    | 1,000  |
+| L    | 10,000 |
+| XL   | 100,000|
+
+<Warning>
+Larger data sizes result in longer test data generation time before the test starts. Start with smaller sizes (XS or S) for initial testing.
+</Warning>
+
+## Load Pattern Shapes
+
+Control how load is distributed over time using the `--shape` flag:
+
+```bash
+chainbench start --profile ethereum.general --users 100 --workers 2 --test-time 1h --target https://node-url --shape spike --headless --autoquit
+```
+
+### Available Shapes
+
+- **ramp-up** (default): Linear increase at spawn-rate until target users reached
+- **step**: Load increases in steps based on spawn-rate
+- **spike**: Ramps to 10% users for 40% of test duration, spikes to 100% for 20%, then drops back to 10%
+
+<Tip>
+List all available shapes:
+```bash
+chainbench list shapes
+```
+</Tip>
+
+## Custom Profile Directories
+
+Use custom profiles from a specific directory:
+
+```bash
+chainbench start --profile-dir /path/to/profiles --profile my-profile --users 50 --workers 2 --test-time 12h --target https://node-url --headless --autoquit
+```
+
+For nested profiles in subdirectories:
+
+```bash
+chainbench start --profile-dir /path/to/profiles --profile bsc.my-profile --users 50 --workers 2 --test-time 12h --target https://node-url --headless --autoquit
+```
+
+<Note>
+Chainbench supports one level of nesting for profile organization.
+</Note>
+
+## Reference Node for Test Data
+
+Generate test data from a different node than the one being tested:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://node-to-test --ref-url https://reference-node --headless --autoquit
+```
+
+This is useful when your target node doesn't have full historical data access.
+
+## Excluding Specific Methods
+
+Exclude methods with specific tags from your test:
+
+```bash
+chainbench start --profile evm.heavy --users 50 --workers 2 --test-time 1h --target https://node-url -E slow -E expensive --headless --autoquit
+```
+
+<Tip>
+You can specify the `--exclude-tags` (or `-E`) flag multiple times to exclude multiple tag categories.
+</Tip>
+
+## Debug and Trace Methods
+
+By default, debug and trace methods are excluded. Enable them with:
+
+```bash
+chainbench start --profile evm.heavy --users 50 --workers 2 --test-time 1h --target https://node-url --debug-trace-methods --headless --autoquit
+```
+
+<Warning>
+Debug and trace methods can be resource-intensive. Use with caution and monitor your node's performance.
+</Warning>

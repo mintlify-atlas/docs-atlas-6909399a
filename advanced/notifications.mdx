@@ -1,0 +1,427 @@
+---
+title: "Notifications"
+description: "Get notified when your benchmark tests complete using ntfy.sh"
+---
+
+Chainbench can send notifications when your load tests start and finish, making it easy to monitor long-running benchmarks without constant checking. Notifications are powered by [ntfy.sh](https://ntfy.sh), a simple pub/sub notification service.
+
+## Overview
+
+When enabled, Chainbench sends notifications to your chosen ntfy.sh topic at key moments:
+
+- **Test Started**: When the benchmark begins in headless mode
+- **Test Finished**: When the benchmark completes or is stopped
+
+You can receive these notifications on:
+- Mobile devices (iOS/Android apps)
+- Desktop (web browser)
+- Command line
+- Email (via ntfy.sh email integration)
+
+## Quick Start
+
+Enable notifications by adding the `--notify` flag with a topic name:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://your-node.com \
+  --users 100 \
+  --test-time 2h \
+  --notify my-chainbench-tests \
+  --headless --autoquit
+```
+
+<Tip>
+Choose a unique topic name to avoid receiving notifications from other users. Consider using a randomly generated string or UUID.
+</Tip>
+
+## How It Works
+
+### ntfy.sh Architecture
+
+Chainbench uses ntfy.sh's public instance by default:
+
+1. When `--notify` is specified, Chainbench publishes messages to `https://ntfy.sh/{your-topic}`
+2. You subscribe to the same topic using the ntfy.sh app or web interface
+3. Messages are delivered in real-time to all subscribers
+
+<Note>
+The default ntfy.sh server is public and requires no authentication. Anyone who knows your topic name can receive your notifications. Use a random, hard-to-guess topic name for privacy.
+</Note>
+
+### Notification Flow
+
+```python
+# When --notify is specified
+if notify:
+    click.echo(f"Notify when test is finished using topic: {notify}")
+    notifier = Notifier(topic=notify)
+else:
+    notifier = NoopNotifier()
+```
+
+Chainbench creates a `Notifier` instance that sends messages to your topic:
+
+```python
+# Test started notification (headless mode only)
+ctx.obj.notifier.notify(
+    title="Test started",
+    message=f"Running test in headless mode for {profile}",
+    tags=["loudspeaker"],
+)
+
+# Test finished notification
+ctx.obj.notifier.notify(
+    title="Test finished", 
+    message=f"Test finished for {profile}", 
+    tags=["tada"]
+)
+```
+
+## Subscribing to Notifications
+
+### Mobile Apps
+
+<Accordion title="iOS">
+1. Install the [ntfy app from the App Store](https://apps.apple.com/us/app/ntfy/id1625396347)
+2. Open the app and tap "Subscribe to topic"
+3. Enter your topic name (e.g., `my-chainbench-tests`)
+4. Notifications will appear as push notifications
+</Accordion>
+
+<Accordion title="Android">
+1. Install the [ntfy app from Google Play](https://play.google.com/store/apps/details?id=io.heckel.ntfy) or [F-Droid](https://f-droid.org/en/packages/io.heckel.ntfy/)
+2. Open the app and tap the "+" button
+3. Enter your topic name
+4. Grant notification permissions when prompted
+</Accordion>
+
+### Web Browser
+
+Visit `https://ntfy.sh/{your-topic}` in any browser:
+
+```
+https://ntfy.sh/my-chainbench-tests
+```
+
+The web interface shows:
+- Real-time notifications as they arrive
+- History of recent messages
+- Options to customize notification sound and behavior
+
+### Command Line
+
+Subscribe using curl:
+
+```bash
+curl -s https://ntfy.sh/my-chainbench-tests/json | while read line; do
+  echo "Notification: $(echo $line | jq -r '.title + ": " + .message')"
+done
+```
+
+## Notification Features
+
+### Priority Levels
+
+The Notifier class supports 5 priority levels:
+
+```python
+class Priority(IntEnum):
+    MIN = 0      # No sound, no vibration
+    LOW = 1      # Quiet notification
+    DEFAULT = 2  # Standard notification (Chainbench uses this)
+    HIGH = 3     # Higher priority sound
+    MAX = 4      # Loud, urgent notification
+```
+
+Chainbench uses `DEFAULT` priority for all notifications.
+
+### Tags (Emojis)
+
+Notifications include visual indicators:
+
+- **loudspeaker** (📢): Test started
+- **tada** (🎉): Test finished
+
+These appear as emojis in the notification title on mobile devices.
+
+### Message Content
+
+Notifications include:
+- **Title**: "Test started" or "Test finished"
+- **Message**: Profile name and test context
+- **Timestamp**: Automatically added by ntfy.sh
+
+## Advanced Configuration
+
+### Custom ntfy.sh Server
+
+While not exposed via CLI, you can host your own ntfy.sh server for privacy:
+
+```python
+# Default server
+DEFAULT_NTFY_SERVER = "https://ntfy.sh"
+
+# To use a custom server, modify the Notifier instantiation
+notifier = Notifier(topic=notify, url="https://your-ntfy-server.com")
+```
+
+<Tip>
+Running your own ntfy.sh instance provides complete privacy and control. See the [ntfy.sh documentation](https://docs.ntfy.sh/) for self-hosting instructions.
+</Tip>
+
+### Email Notifications
+
+Configure ntfy.sh to forward notifications to email:
+
+```python
+notifier.notify(
+    title="Test finished",
+    message=f"Test completed for {profile}",
+    tags=["tada"],
+    email="your-email@example.com"
+)
+```
+
+<Warning>
+Email forwarding requires the recipient email to be verified with ntfy.sh. This feature is not currently exposed in Chainbench CLI but can be added to custom implementations.
+</Warning>
+
+### File Attachments
+
+The Notifier class supports attaching files to notifications:
+
+```python
+notifier.notify(
+    title="Test Results",
+    message="Benchmark complete. Results attached.",
+    file="/path/to/results/stats.csv"
+)
+```
+
+This could be useful for automatically sending test results or logs.
+
+## Use Cases
+
+<Accordion title="Long-Running Benchmarks">
+For tests running several hours or overnight:
+
+```bash
+chainbench start \
+  --profile ethereum.heavy \
+  --target https://your-node.com \
+  --users 500 \
+  --test-time 12h \
+  --notify my-overnight-test-$(date +%s) \
+  --headless --autoquit
+```
+
+Receive a notification on your phone when the test completes.
+</Accordion>
+
+<Accordion title="Automated Testing Pipelines">
+In CI/CD or scheduled testing:
+
+```bash
+#!/bin/bash
+TEST_ID=$(uuidgen)
+
+chainbench start \
+  --profile ethereum.general \
+  --target https://prod-node.com \
+  --notify "prod-monitoring-${TEST_ID}" \
+  --headless --autoquit
+```
+
+Monitor automated tests without polling.
+</Accordion>
+
+<Accordion title="Multi-Node Testing">
+When benchmarking multiple nodes simultaneously:
+
+```bash
+# Terminal 1
+chainbench start --profile ethereum.general \
+  --target https://node1.com \
+  --notify benchmark-comparison \
+  --run-id node1 --headless --autoquit
+
+# Terminal 2
+chainbench start --profile ethereum.general \
+  --target https://node2.com \
+  --notify benchmark-comparison \
+  --run-id node2 --headless --autoquit
+```
+
+Get notified as each node's test completes.
+</Accordion>
+
+<Accordion title="Team Collaboration">
+Share a topic with your team:
+
+```bash
+chainbench start \
+  --profile ethereum.general \
+  --target https://staging-node.com \
+  --notify team-blockchain-tests \
+  --headless --autoquit
+```
+
+Everyone subscribed to the topic receives notifications.
+</Accordion>
+
+## Privacy and Security
+
+### Topic Name Best Practices
+
+<Warning>
+ntfy.sh topics are public by default. Anyone who knows the topic name can:
+- Subscribe and receive your notifications
+- Send messages to your topic
+</Warning>
+
+Follow these practices:
+
+1. **Use random topic names**:
+   ```bash
+   TOPIC="chainbench-$(openssl rand -hex 12)"
+   echo "Subscribe to: $TOPIC"
+   
+   chainbench start --notify "$TOPIC" ...
+   ```
+
+2. **Avoid sensitive information** in notifications:
+   - Don't include passwords, API keys, or internal hostnames
+   - Use generic messages or run IDs
+
+3. **Use access tokens** on self-hosted ntfy.sh:
+   - Configure authentication on your own server
+   - Restrict topic access to authorized users
+
+### Data Retention
+
+ntfy.sh public instance:
+- Messages are stored for 12 hours by default
+- After that, they're permanently deleted
+- No logs of message content are kept
+
+## Troubleshooting
+
+### Not Receiving Notifications
+
+1. **Verify topic name matches**:
+   - Check the topic in your subscription
+   - Ensure no typos or extra spaces
+
+2. **Test manually**:
+   ```bash
+   curl -d "Test notification" https://ntfy.sh/your-topic-name
+   ```
+
+3. **Check app permissions**:
+   - Ensure notification permissions are granted
+   - Check Do Not Disturb settings
+
+4. **Verify headless mode**:
+   - Test started notifications only appear in `--headless` mode
+   - Test finished notifications always appear
+
+### Delayed Notifications
+
+ntfy.sh uses HTTP streaming for real-time delivery:
+- Mobile apps may experience delays if in battery saver mode
+- Web interface requires an active connection
+- Consider using email forwarding for critical alerts
+
+### Connection Issues
+
+If Chainbench can't send notifications:
+
+```python
+# The Notifier uses a 30-second timeout by default
+self.client = HttpClient(url, timeout=30)
+```
+
+- Check your internet connection
+- Verify `https://ntfy.sh` is accessible
+- Look for proxy or firewall restrictions
+
+## Alternative: NoopNotifier
+
+When `--notify` is not specified, Chainbench uses a no-op notifier:
+
+```python
+class NoopNotifier(Notifier):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def notify(self, **kwargs) -> None:
+        """Do nothing."""
+        pass
+```
+
+This allows notification calls throughout the codebase without conditional checks.
+
+## Implementation Reference
+
+The notification system consists of:
+
+### Core Classes
+
+**`Notifier`** (chainbench/util/notify.py:82):
+- Handles HTTP requests to ntfy.sh
+- Supports custom servers, priorities, tags, emails, and file attachments
+
+**`Notification`** (chainbench/util/notify.py:29):
+- Dataclass representing a notification message
+- Builds HTTP headers and content
+
+**`NoopNotifier`** (chainbench/util/notify.py:123):
+- Null object pattern for disabled notifications
+
+### Integration Points
+
+**CLI Argument** (chainbench/main.py:168):
+```python
+@click.option("--notify", default=None, help="Notify when test is finished")
+```
+
+**Notifier Setup** (chainbench/main.py:264-268):
+```python
+if notify:
+    click.echo(f"Notify when test is finished using topic: {notify}")
+    notifier = Notifier(topic=notify)
+else:
+    notifier = NoopNotifier()
+```
+
+**Notification Calls** (chainbench/main.py:426-430, 455):
+- Test started: Line 426
+- Test finished: Line 455
+
+## Example: Complete Workflow
+
+```bash
+# 1. Generate a unique topic
+TOPIC="benchmark-$(date +%Y%m%d)-$(openssl rand -hex 4)"
+echo "Subscribe to: https://ntfy.sh/$TOPIC"
+
+# 2. Subscribe on your phone or browser
+# Visit https://ntfy.sh/benchmark-20260304-a1b2c3d4
+
+# 3. Run the benchmark
+chainbench start \
+  --profile ethereum.general \
+  --target https://eth-mainnet.example.com \
+  --users 100 \
+  --workers 4 \
+  --test-time 2h \
+  --notify "$TOPIC" \
+  --run-id mainnet-load-test-001 \
+  --headless --autoquit
+
+# 4. You'll receive notifications:
+# - "Test started: Running test in headless mode for ethereum.general" 📢
+# - "Test finished: Test finished for ethereum.general" 🎉
+```

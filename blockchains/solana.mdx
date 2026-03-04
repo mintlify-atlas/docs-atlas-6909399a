@@ -1,0 +1,379 @@
+---
+title: Solana
+description: Load test Solana RPC nodes with comprehensive JSON-RPC profiles
+---
+
+Chainbench provides extensive support for testing Solana RPC nodes with profiles based on real-world usage patterns.
+
+## Overview
+
+Solana testing in Chainbench includes:
+- **50+ RPC Methods**: Comprehensive coverage of Solana JSON-RPC API
+- **Real Usage Patterns**: Profiles based on actual network traffic
+- **Dynamic Test Data**: Automatic fetching of accounts, transactions, and blocks
+- **Token Operations**: SPL token account testing
+- **Program Accounts**: Testing getProgramAccounts with filters
+
+## Available Profiles
+
+### solana.general
+
+The general Solana profile simulates realistic production workload based on observed RPC usage patterns.
+
+<CodeGroup>
+```python Method Distribution
+rpc_calls = {
+    SolanaUser.get_account_info: 1000,
+    SolanaUser.get_block: 175,
+    SolanaUser.get_token_accounts_by_owner: 150,
+    SolanaUser.get_multiple_accounts: 150,
+    SolanaUser.get_transaction: 130,
+    SolanaUser.get_signatures_for_address: 75,
+    SolanaUser.get_latest_blockhash: 75,
+    SolanaUser.get_balance: 75,
+    SolanaUser.get_slot: 20,
+    SolanaUser.get_block_height: 15,
+    SolanaUser.get_block_time: 15,
+    SolanaUser.get_program_accounts: 5,
+    SolanaUser.get_signature_statuses: 4,
+    SolanaUser.get_blocks: 2,
+    SolanaUser.get_epoch_info: 2,
+}
+```
+</CodeGroup>
+
+**Wait time**: 1 second between requests (using `constant_pacing(1)`)
+
+### solana.all
+
+Tests all supported Solana RPC methods with equal weight. Useful for comprehensive endpoint testing.
+
+<CodeGroup>
+```python All Methods
+# All 50+ methods from SolanaRpcMethods class with weight 1
+rpc_calls = {
+    SolanaUser.method_to_rpc_call(method): 1 
+    for method in get_subclass_methods(SolanaRpcMethods)
+}
+```
+</CodeGroup>
+
+## Supported RPC Methods
+
+<Tabs>
+  <Tab title="Account Methods">
+    - `getAccountInfo` - Get account data and metadata
+    - `getBalance` - Get account balance in lamports
+    - `getMultipleAccounts` - Batch fetch multiple accounts
+    - `getProgramAccounts` - Get all accounts owned by program
+    - `getTokenAccountBalance` - Get SPL token account balance
+    - `getTokenAccountsByOwner` - Get all token accounts for owner
+    - `getTokenAccountsByDelegate` - Get token accounts by delegate
+    - `getLargestAccounts` - Get largest accounts by balance
+  </Tab>
+  <Tab title="Block Methods">
+    - `getBlock` - Get confirmed block with transactions
+    - `getBlockHeight` - Get current block height
+    - `getBlockTime` - Get estimated production time of block
+    - `getBlocks` - Get list of confirmed blocks
+    - `getBlocksWithLimit` - Get blocks with limit
+    - `getBlockCommitment` - Get commitment for block
+    - `getBlockProduction` - Get block production information
+    - `getFirstAvailableBlock` - Get slot of first available block
+  </Tab>
+  <Tab title="Transaction Methods">
+    - `getTransaction` - Get confirmed transaction details
+    - `getSignatureStatuses` - Get statuses of signatures
+    - `getSignaturesForAddress` - Get confirmed signatures for address
+    - `simulateTransaction` - Simulate transaction execution
+    - `getRecentPrioritizationFees` - Get recent prioritization fees
+    - `getFeeForMessage` - Get fee for message
+    - `getTransactionCount` - Get current transaction count
+  </Tab>
+  <Tab title="Network Methods">
+    - `getEpochInfo` - Get information about current epoch
+    - `getEpochSchedule` - Get epoch schedule
+    - `getSlot` - Get current slot
+    - `getSlotLeader` - Get current slot leader
+    - `getSlotLeaders` - Get slot leaders
+    - `getClusterNodes` - Get cluster nodes
+    - `getRecentPerformanceSamples` - Get performance samples
+    - `getSupply` - Get information about token supply
+  </Tab>
+  <Tab title="Token Methods">
+    - `getTokenAccountBalance` - Get token account balance
+    - `getTokenAccountsByOwner` - Get token accounts by owner
+    - `getTokenAccountsByDelegate` - Get token accounts by delegate
+    - `getTokenLargestAccounts` - Get largest token accounts
+    - `getTokenSupply` - Get token supply
+  </Tab>
+  <Tab title="Utility Methods">
+    - `getHealth` - Get node health status
+    - `getVersion` - Get Solana version
+    - `getIdentity` - Get identity public key
+    - `getGenesisHash` - Get genesis hash
+    - `getLatestBlockhash` - Get latest blockhash
+    - `isBlockhashValid` - Check if blockhash is valid
+    - `minimumLedgerSlot` - Get minimum ledger slot
+    - `getInflationGovernor` - Get inflation governor
+    - `getInflationRate` - Get current inflation rate
+    - `getInflationReward` - Get inflation rewards
+    - `getVoteAccounts` - Get vote accounts
+    - `getStakeActivation` - Get stake activation
+    - `getStakeMinimumDelegation` - Get minimum stake delegation
+    - `getLeaderSchedule` - Get leader schedule
+    - `getHighestSnapshotSlot` - Get highest snapshot slot
+    - `getMaxRetransmitSlot` - Get max retransmit slot
+    - `getMaxShredInsertSlot` - Get max shred insert slot
+    - `getMinimumBalanceForRentExemption` - Get rent exemption balance
+  </Tab>
+</Tabs>
+
+## Example Commands
+
+### General Profile Testing
+
+<CodeGroup>
+```bash Basic Test
+chainbench start --profile solana.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://solana-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash High Load Test
+chainbench start --profile solana.general \
+  --users 200 \
+  --spawn-rate 20 \
+  --workers 4 \
+  --test-time 2h \
+  --target https://solana-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash With Latest Blocks
+# For nodes with limited history
+chainbench start --profile solana.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://solana-node-url \
+  --use-latest-blocks \
+  --size S \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Comprehensive Testing
+
+<CodeGroup>
+```bash All Methods Profile
+chainbench start --profile solana.all \
+  --users 30 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://solana-node-url \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Single Method Testing
+
+<CodeGroup>
+```bash Test getAccountInfo
+chainbench start getAccountInfo \
+  --users 100 \
+  --workers 4 \
+  --test-time 30m \
+  --target https://solana-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash Test getBlock
+chainbench start getBlock \
+  --users 20 \
+  --workers 2 \
+  --test-time 30m \
+  --target https://solana-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash List All Methods
+chainbench list methods
+```
+</CodeGroup>
+
+## Solana-Specific Features
+
+### Test Data Generation
+
+Chainbench automatically fetches real Solana blockchain data:
+- **Accounts**: Public keys for getAccountInfo, getBalance
+- **Token Accounts**: SPL token accounts for token operations
+- **Transactions**: Transaction signatures for getTransaction
+- **Blocks**: Slot numbers for getBlock operations
+- **Block Hashes**: Recent blockhashes for validation
+- **Token Addresses**: Token mint addresses
+
+### Program Account Testing
+
+The profile includes specialized getProgramAccounts testing:
+
+<CodeGroup>
+```python Example
+# Tests Stake program with specific filters
+params = [
+    "Stake11111111111111111111111111111111111111",
+    {
+        "encoding": "jsonParsed",
+        "commitment": "finalized",
+        "filters": [
+            {"memcmp": {"bytes": "2K9XJAj3VtojUhyKdXVfGnueSvnyFNfSACkn1CwgBees", "offset": 12}}
+        ],
+    },
+]
+```
+</CodeGroup>
+
+### Encoding Support
+
+Solana methods support multiple encoding formats:
+- `jsonParsed` - Human-readable JSON format
+- `base64` - Base64 encoded binary data
+- `base58` - Base58 encoded data
+
+### Commitment Levels
+
+Tests use appropriate commitment levels:
+- `processed` - For real-time data
+- `confirmed` - For recent finality
+- `finalized` - For guaranteed finality
+
+## Advanced Usage
+
+### Custom Block Range
+
+<CodeGroup>
+```bash Specific Slot Range
+chainbench start --profile solana.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://solana-node-url \
+  --start-block 150000000 \
+  --end-block 150001000 \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Using Reference Node
+
+<CodeGroup>
+```bash Separate Data Source
+chainbench start --profile solana.general \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://node-under-test \
+  --ref-url https://reference-solana-node \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Test Data Sizes
+
+Solana test data sizes:
+
+| Size | Slots |
+|------|-------|
+| XS   | 10    |
+| S    | 100   |
+| M    | 1,000 |
+| L    | 10,000|
+| XL   | 100,000|
+
+<CodeGroup>
+```bash Large Dataset
+chainbench start --profile solana.general \
+  --users 100 \
+  --workers 4 \
+  --test-time 2h \
+  --target https://solana-node-url \
+  --size L \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+## Performance Considerations
+
+### Recommended Settings
+
+**Full RPC Nodes**:
+- Users: 50-200 concurrent users
+- Spawn Rate: 10-50 users/second
+- Workers: 2-4
+- Test Data Size: S or M
+
+**getProgramAccounts Testing**:
+- Users: 5-20 concurrent users (this method is very heavy)
+- Spawn Rate: 1-5 users/second
+- Workers: 1-2
+- Test Data Size: XS or S
+
+**Transaction History Nodes**:
+- Users: 20-100 concurrent users
+- Spawn Rate: 5-20 users/second
+- Workers: 2-4
+- Test Data Size: M or L
+
+### Method-Specific Notes
+
+<Note>
+**Heavy Methods**: `getProgramAccounts`, `getBlock` (with full transactions), and `getSignaturesForAddress` are resource-intensive. Use lower concurrency for these methods.
+</Note>
+
+<Note>
+**Error Handling**: Chainbench excludes error code `-32007` ("Node is unhealthy") from failure metrics to handle temporary node states gracefully.
+</Note>
+
+## Solana Networks
+
+Test against different Solana clusters:
+
+### Mainnet Beta
+```bash
+chainbench start --profile solana.general \
+  --target https://api.mainnet-beta.solana.com \
+  --users 50 --workers 2 --test-time 1h --headless --autoquit
+```
+
+### Devnet
+```bash
+chainbench start --profile solana.general \
+  --target https://api.devnet.solana.com \
+  --users 20 --workers 1 --test-time 30m --headless --autoquit
+```
+
+### Testnet
+```bash
+chainbench start --profile solana.general \
+  --target https://api.testnet.solana.com \
+  --users 20 --workers 1 --test-time 30m --headless --autoquit
+```
+
+## Related Resources
+
+- [Solana RPC API Documentation](https://docs.solana.com/api/http)
+- [Chainstack Solana Documentation](https://docs.chainstack.com/docs/solana)
+- [Creating Custom Profiles](/guides/custom-profiles)

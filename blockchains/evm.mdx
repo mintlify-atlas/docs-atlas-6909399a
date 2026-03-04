@@ -1,0 +1,344 @@
+---
+title: EVM (Generic)
+description: Generic EVM profiles for testing any EVM-compatible blockchain
+---
+
+Chainbench includes generic EVM profiles that work with any EVM-compatible blockchain. These profiles are ideal for testing custom chains, testnets, or any network that implements the Ethereum JSON-RPC specification.
+
+## Overview
+
+The generic EVM profiles provide:
+- **evm.light**: Lightweight profile for basic node testing
+- **evm.heavy**: Heavy profile for archive nodes with debug/trace methods
+- **Universal Compatibility**: Works with any EVM-compatible chain
+- **Flexible Testing**: Suitable for both full and archive nodes
+
+## Available Profiles
+
+### evm.light
+
+The light profile tests common JSON-RPC methods without resource-intensive operations. Ideal for testing standard node endpoints.
+
+<CodeGroup>
+```python Method Distribution
+rpc_calls = {
+    EvmUser.eth_get_transaction_receipt: 1,
+    EvmUser.eth_block_number: 1,
+    EvmUser.eth_get_balance: 1,
+    EvmUser.eth_chain_id: 1,
+    EvmUser.eth_get_block_by_number: 1,
+    EvmUser.eth_get_transaction_by_hash: 1,
+    EvmUser.web3_client_version: 1,
+}
+```
+</CodeGroup>
+
+**Wait time**: 1 second between requests (using `constant_pacing(1)`)
+
+**Best for**:
+- Full nodes
+- Snap sync nodes
+- Basic infrastructure testing
+- High-frequency monitoring
+
+### evm.heavy
+
+The heavy profile tests resource-intensive debug and trace methods. Requires archive nodes with full historical data.
+
+<CodeGroup>
+```python Method Distribution
+rpc_calls = {
+    EvmUser.debug_trace_block_by_hash: 1,
+    EvmUser.debug_trace_block_by_number: 1,
+    EvmUser.debug_trace_call: 1,
+    EvmUser.debug_trace_transaction: 1,
+    EvmUser.debug_get_raw_receipts: 1,
+    EvmUser.eth_get_logs: 1,
+    EvmUser.trace_replay_block_transactions: 1,
+    EvmUser.trace_replay_transaction: 1,
+    EvmUser.trace_transaction: 1,
+    EvmUser.trace_block: 1,
+}
+```
+</CodeGroup>
+
+**Wait time**: 10 seconds between requests (using `constant_pacing(10)`)
+
+**Best for**:
+- Archive nodes
+- Debug API testing
+- Trace API testing
+- Block explorer backends
+- Analytics infrastructure
+
+<Note>
+The `evm.heavy` profile automatically clears debug/trace tag exclusions, enabling these methods without the `--debug-trace-methods` flag.
+</Note>
+
+## Supported RPC Methods
+
+All generic EVM profiles support the standard Ethereum JSON-RPC methods:
+
+<Tabs>
+  <Tab title="Light Profile Methods">
+    - `eth_blockNumber` - Get the latest block number
+    - `eth_chainId` - Get the chain ID
+    - `eth_getBalance` - Get account balance at latest block
+    - `eth_getBlockByNumber` - Fetch latest block with full transaction details
+    - `eth_getTransactionByHash` - Get transaction by hash
+    - `eth_getTransactionReceipt` - Get transaction receipt
+    - `web3_clientVersion` - Get client implementation version
+  </Tab>
+  <Tab title="Heavy Profile Methods">
+    - `debug_traceBlockByHash` - Trace all transactions in block by hash
+    - `debug_traceBlockByNumber` - Trace all transactions in latest block
+    - `debug_traceCall` - Trace arbitrary contract call
+    - `debug_traceTransaction` - Trace specific transaction execution
+    - `debug_getRawReceipts` - Get raw transaction receipts
+    - `eth_getLogs` - Get event logs with filters
+    - `trace_block` - Get traces for all transactions in block
+    - `trace_replayBlockTransactions` - Replay all block transactions
+    - `trace_replayTransaction` - Replay single transaction
+    - `trace_transaction` - Get transaction trace
+  </Tab>
+  <Tab title="All Supported Methods">
+    The full EvmUser class supports 50+ methods including:
+    
+    **Block Methods**: `eth_getBlockByHash`, `eth_getBlockByNumber`, `eth_getBlockTransactionCountByNumber`, `eth_getBlockTransactionCountByHash`, `eth_getHeaderByNumber`, `eth_getHeaderByHash`, `eth_getBlockReceipts`
+    
+    **Transaction Methods**: `eth_getTransactionByHash`, `eth_getTransactionReceipt`, `eth_getTransactionByBlockHashAndIndex`, `eth_getTransactionByBlockNumberAndIndex`, `eth_getTransactionCount`
+    
+    **Account Methods**: `eth_getBalance`, `eth_getCode`, `eth_getTransactionCount`
+    
+    **Gas Methods**: `eth_gasPrice`, `eth_estimateGas`, `eth_feeHistory`, `eth_maxPriorityFeePerGas`
+    
+    **Debug Methods**: `debug_traceTransaction`, `debug_traceCall`, `debug_traceBlock`, `debug_traceBlockByNumber`, `debug_traceBlockByHash`, `debug_getBadBlocks`, `debug_getRawBlock`, `debug_getRawHeader`, `debug_getRawReceipts`, `debug_getRawTransaction`, `debug_storageRangeAt`
+    
+    **Trace Methods**: `trace_transaction`, `trace_block`, `trace_call`, `trace_callMany`, `trace_filter`, `trace_replayTransaction`, `trace_replayBlockTransactions`
+    
+    **Network Methods**: `net_version`, `net_listening`, `net_peerCount`
+    
+    **Utility Methods**: `web3_clientVersion`, `web3_sha3`, `eth_syncing`, `eth_accounts`
+  </Tab>
+</Tabs>
+
+## Example Commands
+
+### Light Profile Testing
+
+<CodeGroup>
+```bash Basic Test
+chainbench start --profile evm.light \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://your-evm-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash With Latest Blocks
+# For nodes with limited history (e.g., snap sync)
+chainbench start --profile evm.light \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://your-evm-node-url \
+  --use-latest-blocks \
+  --size S \
+  --headless \
+  --autoquit
+```
+
+```bash Custom Data Size
+# Use larger test data for more comprehensive testing
+chainbench start --profile evm.light \
+  --users 100 \
+  --workers 4 \
+  --test-time 2h \
+  --target https://your-evm-node-url \
+  --size L \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Heavy Profile Testing
+
+<CodeGroup>
+```bash Archive Node Test
+chainbench start --profile evm.heavy \
+  --users 10 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://your-archive-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash With Custom Block Range
+chainbench start --profile evm.heavy \
+  --users 5 \
+  --workers 1 \
+  --test-time 30m \
+  --target https://your-archive-node-url \
+  --start-block 1000000 \
+  --end-block 1100000 \
+  --headless \
+  --autoquit
+```
+
+```bash Debug/Trace Intensive
+chainbench start --profile evm.heavy \
+  --users 3 \
+  --spawn-rate 1 \
+  --workers 1 \
+  --test-time 2h \
+  --target https://your-archive-node-url \
+  --size XS \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Single Method Testing
+
+<CodeGroup>
+```bash Test Specific Method
+chainbench start eth_getBalance \
+  --users 100 \
+  --workers 4 \
+  --test-time 30m \
+  --target https://your-evm-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash List Available Methods
+chainbench list methods
+```
+</CodeGroup>
+
+## Compatible Blockchains
+
+The generic EVM profiles work with any blockchain that implements the Ethereum JSON-RPC specification:
+
+### Mainnets
+- Ethereum
+- BNB Smart Chain
+- Polygon
+- Avalanche C-Chain
+- Fantom
+- Gnosis Chain
+- Arbitrum
+- Optimism
+- Base
+- Ronin
+- And many more...
+
+### Testnets
+- Sepolia
+- Holesky
+- Goerli (deprecated)
+- Mumbai
+- BSC Testnet
+- Arbitrum Sepolia
+- Optimism Sepolia
+- Base Sepolia
+
+### Custom Chains
+- Private EVM networks
+- Custom L2 rollups
+- App-specific chains
+- Development networks
+
+## Chain-Specific Profiles
+
+While `evm.light` and `evm.heavy` work universally, Chainbench also includes optimized profiles for specific chains:
+
+- `ethereum.general` - Ethereum mainnet
+- `bsc.general` - BNB Smart Chain
+- `polygon.general` - Polygon
+- `avalanche.general` - Avalanche C-Chain
+- `arbitrum.general` - Arbitrum
+- `optimism.general` - Optimism
+- `base.general` - Base
+- `fantom.general` - Fantom
+- `gnosis.general` - Gnosis Chain
+
+These chain-specific profiles use realistic method distributions based on actual usage patterns.
+
+## Advanced Usage
+
+### Custom Test Data Range
+
+Specify exact block range for test data:
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://your-evm-node-url \
+  --start-block 5000000 \
+  --end-block 5001000 \
+  --headless \
+  --autoquit
+```
+
+### Using Reference Node
+
+Fetch test data from a reference node:
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://node-under-test \
+  --ref-url https://reference-node \
+  --headless \
+  --autoquit
+```
+
+### Batch Requests
+
+Test batch JSON-RPC requests:
+
+```bash
+chainbench start --profile evm.light \
+  --users 20 \
+  --workers 2 \
+  --test-time 30m \
+  --target https://your-evm-node-url \
+  --batch \
+  --batch-size 10 \
+  --headless \
+  --autoquit
+```
+
+## Performance Considerations
+
+### Light Profile
+
+- **Recommended Users**: 50-500 concurrent users
+- **Spawn Rate**: 10-50 users/second
+- **Workers**: 2-8 depending on test machine
+- **Test Data Size**: S or M for most use cases
+
+### Heavy Profile
+
+- **Recommended Users**: 3-20 concurrent users
+- **Spawn Rate**: 1-5 users/second
+- **Workers**: 1-2 (trace operations are CPU intensive)
+- **Test Data Size**: XS or S (larger sizes require significant processing time)
+
+<Note>
+Debug and trace methods are extremely resource-intensive. Start with low user counts and monitor node performance.
+</Note>
+
+## Related Resources
+
+- [Ethereum-Specific Testing](/blockchains/ethereum)
+- [Supported Blockchains](https://chainstack.com/protocols/)
+- [Creating Custom Profiles](/guides/custom-profiles)

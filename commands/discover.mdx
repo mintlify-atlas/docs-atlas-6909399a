@@ -1,0 +1,260 @@
+---
+title: "chainbench discover"
+description: "Discover which RPC methods are available on a blockchain endpoint"
+---
+
+## Overview
+
+The `discover` command tests a blockchain endpoint to determine which RPC methods it supports. This is useful for:
+
+- Identifying available methods on a new endpoint
+- Validating endpoint capabilities before load testing
+- Comparing method support across different providers or node clients
+- Troubleshooting method availability issues
+
+The discovery tool sends test requests for each method and analyzes the responses to determine support.
+
+## Basic Usage
+
+```bash
+chainbench discover https://eth-rpc-endpoint
+```
+
+This discovers methods using the default Ethereum JSON-RPC specification.
+
+## Arguments
+
+<ParamField path="endpoint" type="string" required>
+  The blockchain endpoint URL to test.
+  
+  ```bash
+  chainbench discover https://eth-mainnet.example.com
+  ```
+</ParamField>
+
+## Options
+
+<ParamField path="--clients" type="string" optional>
+  Comma-separated list of client types to test. The discovery will check methods specific to these clients.
+  
+  ```bash
+  --clients geth,erigon
+  --clients eth,bsc
+  ```
+  
+  If not specified, defaults to `eth` (Ethereum JSON-RPC specification).
+  
+  <Note>
+    Use `chainbench list clients` to see all available client options and their reference versions.
+  </Note>
+</ParamField>
+
+## How It Works
+
+1. **Method Selection**: Based on the `--clients` parameter, Chainbench compiles a list of methods to test
+2. **Parallel Testing**: Sends test requests for each method concurrently (pool of 20)
+3. **Response Analysis**: Analyzes response codes and error messages to determine support:
+   - HTTP 200 or valid response → Method supported ✔
+   - Error code -32601 (Method not found) → Not supported ✖
+   - Error code -32602 (Invalid params) → Supported but needs params ✔
+   - HTTP 429 → Rate limited, retries with exponential backoff
+   - Other errors → Unable to determine
+
+4. **Results Display**: Shows each method with its support status
+
+## Examples
+
+<Tabs>
+  <Tab title="Ethereum Endpoint">
+    ```bash
+    chainbench discover https://eth-mainnet.example.com
+    ```
+    
+    Discovers methods from Ethereum JSON-RPC specification (default).
+  </Tab>
+  
+  <Tab title="Multiple Clients">
+    ```bash
+    chainbench discover https://eth-node.example.com --clients geth,erigon
+    ```
+    
+    Tests methods specific to Geth and Erigon clients.
+  </Tab>
+  
+  <Tab title="BSC Endpoint">
+    ```bash
+    chainbench discover https://bsc-node.example.com --clients eth,bsc
+    ```
+    
+    Tests both standard Ethereum and BSC-specific methods.
+  </Tab>
+</Tabs>
+
+## Example Output
+
+```bash
+$ chainbench discover https://eth-node.example.com --clients geth
+
+Defaulting to ethereum execution api methods.
+Please wait, discovering methods available on https://eth-node.example.com...
+
+eth_blockNumber, ✔
+eth_getBalance, ✔
+eth_getBlockByNumber, ✔
+eth_getBlockByHash, ✔
+eth_getTransactionByHash, ✔
+eth_getTransactionReceipt, ✔
+eth_call, ✔
+eth_estimateGas, ✔
+eth_gasPrice, ✔
+eth_getCode, ✔
+eth_getLogs, ✔
+eth_getStorageAt, ✔
+eth_getTransactionCount, ✔
+eth_chainId, ✔
+eth_syncing, ✔
+debug_traceTransaction, ✖
+debug_traceBlockByNumber, ✖
+trace_block, ✖
+trace_transaction, ✖
+parity_getBlockReceipts, Unable to determine. Unknown error -32600: Invalid request
+```
+
+## Understanding Results
+
+<ParamField path="✔ Supported" type="indicator">
+  The method is available and responded successfully (or indicated it needs parameters).
+</ParamField>
+
+<ParamField path="✖ Not Supported" type="indicator">
+  The method is not available on this endpoint.
+</ParamField>
+
+<ParamField path="Unable to determine" type="indicator">
+  The response was ambiguous. This can happen when:
+  - The endpoint returns non-standard error codes
+  - There are connectivity issues
+  - The endpoint has unusual rate limiting
+  - The method exists but has strict parameter requirements
+</ParamField>
+
+## Available Clients
+
+To see all available client options:
+
+```bash
+chainbench list clients
+```
+
+Common client options include:
+- `eth` - Ethereum JSON-RPC specification
+- `geth` - Geth-specific methods
+- `erigon` - Erigon-specific methods
+- `bsc` - Binance Smart Chain methods
+- `nethermind` - Nethermind-specific methods
+
+## Rate Limiting
+
+The discovery tool includes automatic retry logic for rate-limited endpoints:
+
+- Detects HTTP 429 (Too Many Requests) responses
+- Uses exponential backoff (2s minimum, 10s maximum)
+- Automatically retries rate-limited requests
+
+If you encounter persistent rate limiting:
+
+1. Some providers have strict rate limits on discovery
+2. Consider using `--clients` to limit the scope of discovery
+3. Wait a few minutes and try again
+4. Use authenticated endpoints if available
+
+## Common Use Cases
+
+### Before Load Testing
+
+```bash
+# Discover what's available
+chainbench discover https://new-node.example.com
+
+# Then test only supported methods
+chainbench start eth_blockNumber --target https://new-node.example.com ...
+```
+
+### Comparing Providers
+
+```bash
+# Provider A
+chainbench discover https://provider-a.example.com --clients geth > provider-a.txt
+
+# Provider B
+chainbench discover https://provider-b.example.com --clients geth > provider-b.txt
+
+# Compare results
+diff provider-a.txt provider-b.txt
+```
+
+### Validating Node Configuration
+
+```bash
+# Check if trace methods are enabled
+chainbench discover https://node.example.com --clients geth | grep trace
+
+# Check if debug methods are enabled
+chainbench discover https://node.example.com --clients geth | grep debug
+```
+
+## Troubleshooting
+
+### Endpoint Not Responding
+
+```
+Target endpoint is required.
+```
+
+**Solution**: Ensure you provide a valid endpoint URL:
+```bash
+chainbench discover https://node.example.com
+```
+
+### All Methods Return "Unable to determine"
+
+**Possible causes**:
+- The endpoint requires authentication
+- CORS or firewall blocking requests
+- The endpoint is not a JSON-RPC endpoint
+- Network connectivity issues
+
+**Solution**: Verify the endpoint works with a simple curl request:
+```bash
+curl -X POST https://node.example.com \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+### Timeout Errors
+
+```
+eth_someMethod, HTTP Timeout Exception: ...
+```
+
+**Solution**: The endpoint may be slow or overloaded. Try:
+- Testing during off-peak hours
+- Using a different endpoint
+- Checking endpoint health status
+
+## Technical Details
+
+The discovery implementation:
+
+- **Timeout**: 5 seconds per method request
+- **Concurrency**: Pool of 20 concurrent greenlets
+- **User Agent**: Mimics mobile browser to avoid bot detection
+- **Error Handling**: Analyzes error codes -32600, -32601, -32602, -32604
+- **Retry Logic**: Exponential backoff for HTTP 429
+
+For implementation details, see `chainbench/tools/discovery/rpc.py`.
+
+## Related Commands
+
+- [chainbench list](/commands/list) - List available methods, profiles, shapes, and clients
+- [chainbench start](/commands/start) - Start a load test with discovered methods

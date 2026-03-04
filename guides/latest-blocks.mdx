@@ -1,0 +1,297 @@
+---
+title: Testing with Latest Blocks
+description: Test nodes with limited history by using the latest blocks with Chainbench's dynamic block tracking
+---
+
+When testing nodes that run in sync modes with limited blockchain history, Chainbench's `--use-latest-blocks` feature ensures your tests use only the most recent available blocks.
+
+## Why Use Latest Blocks?
+
+Many blockchain nodes run in sync modes that don't store full historical data:
+
+- **Snap sync**: Only keeps recent state
+- **Fast sync**: Doesn't store full historical blocks
+- **Light sync**: Minimal historical data
+- **Archive pruning**: Older data removed to save space
+
+<Note>
+For example, some sync modes only keep the last 128 blocks in history. Trying to query older blocks will result in errors.
+</Note>
+
+## Enabling Latest Blocks Mode
+
+Use the `--use-latest-blocks` flag to enable dynamic block tracking:
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --use-latest-blocks --headless --autoquit
+```
+
+## How It Works
+
+When `--use-latest-blocks` is enabled:
+
+1. **Initial Data Generation**: Chainbench fetches the latest N blocks (based on `--size`)
+2. **Background Updates**: A background process continuously updates the test data with new blocks
+3. **Dynamic Testing**: As new blocks arrive, test data automatically uses them
+
+<Steps>
+  <Step title="Chainbench fetches current block height">
+    Determines the latest block available on the node
+  </Step>
+  
+  <Step title="Generates test data from recent blocks">
+    Collects block numbers, hashes, transactions, and addresses from the latest N blocks
+  </Step>
+  
+  <Step title="Starts background updater">
+    Launches a process that periodically refreshes the test data with newest blocks
+  </Step>
+  
+  <Step title="Test executes with fresh data">
+    Your load test always uses blocks that exist in the node's history
+  </Step>
+</Steps>
+
+## Configuring Block Range with Size
+
+The `--size` flag determines how many recent blocks to use:
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --use-latest-blocks --size S --headless --autoquit
+```
+
+| Size | Blocks  | Use Case |
+|------|---------|----------|
+| XS   | 10      | Quick tests, very limited history nodes |
+| S    | 100     | Standard tests, nodes with ~128 block history |
+| M    | 1,000   | Extended tests, nodes with moderate history |
+| L    | 10,000  | Long tests, nodes with significant history |
+| XL   | 100,000 | Comprehensive tests, near-archive nodes |
+
+<Warning>
+If you specify a size larger than your node's available history, test data generation will fail. Start with smaller sizes (XS or S) for nodes with limited history.
+</Warning>
+
+## Example: Testing a Snap Sync Node
+
+A node running snap sync might only keep the last 128 blocks:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 2h --target https://snap-sync-node --use-latest-blocks --size S --headless --autoquit
+```
+
+With `--size S` (100 blocks) and `--use-latest-blocks`:
+- Initial data uses blocks N-100 to N (where N is current height)
+- As new blocks arrive, test data updates to blocks N-99 to N+1, then N-98 to N+2, etc.
+- Test always stays within the node's 128-block history window
+
+<Tip>
+For a node with only 128 blocks of history, use `--size XS` or `--size S` to ensure all test data remains accessible throughout the test duration.
+</Tip>
+
+## Latest Blocks with Different Profiles
+
+### Light Profiles
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --use-latest-blocks --size S --headless --autoquit
+```
+
+Light profiles work well with latest blocks since they focus on recent state queries.
+
+### Heavy Profiles
+
+```bash
+chainbench start --profile evm.heavy --users 30 --workers 2 --test-time 30m --target https://node-url --use-latest-blocks --size XS --headless --autoquit
+```
+
+For heavy profiles with complex queries, start with smaller data sizes and shorter durations.
+
+### Single Method Testing
+
+```bash
+chainbench start eth_getBlockByNumber --users 50 --workers 2 --test-time 1h --target https://node-url --use-latest-blocks --size S --headless --autoquit
+```
+
+## Latest Blocks vs Custom Block Range
+
+### Custom Block Range (Archive Nodes)
+
+For nodes with full history:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://archive-node --start-block 1000000 --end-block 1001000 --headless --autoquit
+```
+
+This uses a specific historical range that never changes.
+
+### Latest Blocks (Limited History Nodes)
+
+For nodes with limited history:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://sync-node --use-latest-blocks --size S --headless --autoquit
+```
+
+This continuously updates to use the latest available blocks.
+
+<Note>
+When `--use-latest-blocks` is set, any custom block range specified with `--start-block` and `--end-block` is ignored.
+</Note>
+
+## Background Update Process
+
+The background updater:
+- Runs continuously during your test
+- Fetches new blocks as they're mined
+- Updates the test data pool
+- Removes oldest blocks to maintain the configured size
+- Operates independently of the load test workers
+
+<Tip>
+The background process is automatic and requires no manual intervention. It ensures your test data stays current throughout long-running tests.
+</Tip>
+
+## Use Cases
+
+### Testing Newly Deployed Nodes
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 4h --target https://new-node --use-latest-blocks --size S --headless --autoquit
+```
+
+New nodes syncing from genesis or recent checkpoints may have limited history initially.
+
+### Testing Different Sync Modes
+
+Compare performance across sync modes:
+
+```bash
+# Snap sync node
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://snap-sync-node --use-latest-blocks --size S --headless --autoquit --run-id snap-sync
+
+# Full node
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://full-node --use-latest-blocks --size M --headless --autoquit --run-id full-node
+
+# Archive node (custom range)
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://archive-node --start-block 1000000 --end-block 1001000 --headless --autoquit --run-id archive-node
+```
+
+### Production Monitoring
+
+```bash
+chainbench start --profile ethereum.general --users 100 --workers 4 --test-time 24h --target https://production-node --use-latest-blocks --size M --headless --autoquit
+```
+
+Long-running tests on production nodes benefit from continuously updated test data.
+
+## Batch Requests with Latest Blocks
+
+Combine batch mode with latest blocks:
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://node-url --use-latest-blocks --size S --batch --batch-size 10 --headless --autoquit
+```
+
+This tests batch request performance while ensuring all requested blocks are available.
+
+## Reference Node for Latest Blocks
+
+Generate test data from a reference node with more history:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://limited-node --ref-url https://archive-node --use-latest-blocks --size S --headless --autoquit
+```
+
+Use cases:
+- Target node is still syncing
+- Target node has unstable history
+- Want to pre-generate data from a reliable source
+
+<Warning>
+Even when using `--ref-url`, the test still runs against the `--target` node. The reference node is only used for initial data generation.
+</Warning>
+
+## Monitoring Block Updates
+
+Chainbench logs when it updates test data with new blocks. Monitor the output:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 2h --target https://node-url --use-latest-blocks --size S --headless --autoquit --log-level INFO
+```
+
+You'll see messages indicating:
+- Initial block range used
+- When new blocks are detected
+- When test data is refreshed
+
+## Best Practices
+
+### For Limited History Nodes
+
+```bash
+chainbench start --profile evm.light --users 50 --workers 2 --test-time 1h --target https://snap-sync-node --use-latest-blocks --size XS --headless --autoquit
+```
+
+- Always use `--use-latest-blocks`
+- Start with small sizes (XS or S)
+- Monitor for block availability errors
+- Avoid heavy profiles initially
+
+### For Testing Consistency
+
+```bash
+# Test 1
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 30m --target https://node-url --use-latest-blocks --size S --headless --autoquit --run-id test-1
+
+# Test 2 (comparable)
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 30m --target https://node-url --use-latest-blocks --size S --headless --autoquit --run-id test-2
+```
+
+Use the same size and similar test durations for comparable results.
+
+### For Long-Running Tests
+
+```bash
+chainbench start --profile ethereum.general --users 100 --workers 4 --test-time 12h --target https://node-url --use-latest-blocks --size M --headless --autoquit
+```
+
+- Use larger sizes (M or L) to avoid repeatedly cycling through the same blocks
+- Longer tests benefit more from dynamic updates
+- Monitor node health throughout
+
+## Troubleshooting
+
+### "Block not found" Errors
+
+**Cause**: Test data contains blocks no longer in node's history
+
+**Solution**: Use smaller `--size` value
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://node-url --use-latest-blocks --size XS --headless --autoquit
+```
+
+### Test Data Generation Takes Too Long
+
+**Cause**: Requesting too many recent blocks
+
+**Solution**: Reduce size or use reference node
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://node-url --ref-url https://archive-node --use-latest-blocks --size S --headless --autoquit
+```
+
+### Inconsistent Results
+
+**Cause**: Block composition changes as new blocks arrive
+
+**Solution**: This is expected behavior with latest blocks. For consistent test data, use custom block ranges on archive nodes instead:
+
+```bash
+chainbench start --profile ethereum.general --users 50 --workers 2 --test-time 1h --target https://archive-node --start-block 1000000 --end-block 1001000 --headless --autoquit
+```
+
+<Note>
+Some result variation is normal with `--use-latest-blocks` since block contents (transactions, gas usage) vary. This makes results more representative of real-world conditions.
+</Note>

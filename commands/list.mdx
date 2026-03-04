@@ -1,0 +1,400 @@
+---
+title: "chainbench list"
+description: "List available methods, profiles, shapes, and clients for load testing"
+---
+
+## Overview
+
+The `list` command group provides information about available resources in Chainbench:
+
+- **methods** - RPC methods that can be tested individually
+- **profiles** - Pre-configured test profiles with multiple weighted methods
+- **shapes** - Load pattern shapes for controlling test behavior
+- **clients** - Client types for endpoint discovery
+
+## Subcommands
+
+### chainbench list methods
+
+Lists all RPC methods available for testing.
+
+```bash
+chainbench list methods
+```
+
+#### Example Output
+
+```bash
+$ chainbench list methods
+
+Methods for EvmUser: 
+- eth_blockNumber
+- eth_getBalance
+- eth_getBlockByNumber
+- eth_getBlockByHash
+- eth_getTransactionByHash
+- eth_getTransactionReceipt
+- eth_call
+- eth_estimateGas
+- eth_gasPrice
+- eth_getCode
+- eth_getLogs
+- eth_getStorageAt
+- eth_getTransactionCount
+- eth_chainId
+- eth_syncing
+- eth_getBlockTransactionCountByHash
+- eth_getBlockTransactionCountByNumber
+- eth_getUncleCountByBlockHash
+- eth_getUncleCountByBlockNumber
+- debug_traceTransaction
+- debug_traceBlockByNumber
+- trace_block
+- trace_transaction
+
+Methods for SolanaUser: 
+- getBalance
+- getBlock
+- getBlockHeight
+- getBlockProduction
+- getBlockTime
+- getClusterNodes
+- getEpochInfo
+- getHealth
+- getSlot
+- getTransaction
+- getVersion
+- getVoteAccounts
+```
+
+#### Usage with start
+
+Once you identify a method, use it with the `start` command:
+
+```bash
+chainbench start eth_getBlockByNumber \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://node-url \
+  --headless \
+  --autoquit
+```
+
+<Note>
+  Methods are grouped by user class (EvmUser for EVM chains, SolanaUser for Solana). Some methods like `debug_*` and `trace_*` are excluded by default unless you use `--debug-trace-methods`.
+</Note>
+
+---
+
+### chainbench list profiles
+
+Lists all available load test profiles.
+
+```bash
+chainbench list profiles
+```
+
+#### Options
+
+<ParamField path="-d, --profile-dir" type="path" optional>
+  Specify a custom directory to list profiles from.
+  
+  ```bash
+  chainbench list profiles --profile-dir /path/to/custom/profiles
+  ```
+  
+  If not specified, lists profiles from the default `chainbench/profile` directory.
+</ParamField>
+
+#### Example Output
+
+```bash
+$ chainbench list profiles
+
+arbitrum.general
+avalanche.general
+base.general
+bsc.general
+bsc.historical
+bsc.light
+eth-archive.general
+ethereum.general
+evm.heavy
+evm.light
+fantom.general
+gnosis.general
+oasis.general
+optimism.general
+polygon.general
+ronin.general
+solana.general
+starknet.general
+```
+
+#### Profile Naming Convention
+
+Profiles use dot notation for organization:
+- `network.variant` - Maps to `profile/network/variant.py`
+- `evm.light` - Maps to `profile/evm/light.py`
+
+Only one level of nesting is supported.
+
+#### Usage with start
+
+```bash
+chainbench start --profile ethereum.general \
+  --users 100 \
+  --workers 4 \
+  --test-time 6h \
+  --target https://node-url \
+  --headless \
+  --autoquit
+```
+
+#### Custom Profile Directories
+
+```bash
+# List custom profiles
+chainbench list profiles -d ~/my-profiles
+
+# Use custom profile
+chainbench start \
+  --profile-dir ~/my-profiles \
+  --profile my-custom-profile \
+  --target https://node-url \
+  ...
+```
+
+<Note>
+  For information on creating custom profiles, see the [Custom Profiles Guide](/guides/custom-profiles).
+</Note>
+
+---
+
+### chainbench list shapes
+
+Lists all available load pattern shapes.
+
+```bash
+chainbench list shapes
+```
+
+#### Example Output
+
+```bash
+$ chainbench list shapes
+
+spike
+step
+```
+
+#### Available Shapes
+
+<ParamField path="step" type="shape">
+  Load increases in discrete steps.
+  
+  - Step size controlled by `--spawn-rate`
+  - Number of steps = `--users` / `--spawn-rate`
+  - Step duration = `--test-time` / number of steps
+  
+  **Example**:
+  ```bash
+  chainbench start eth_blockNumber \
+    --shape step \
+    --users 100 \
+    --spawn-rate 10 \
+    --test-time 10m \
+    --target https://node-url
+  ```
+  
+  This creates 10 steps, each lasting 1 minute, adding 10 users per step.
+</ParamField>
+
+<ParamField path="spike" type="shape">
+  Load runs in a spike pattern:
+  
+  - Ramps to 10% of users for 40% of test duration
+  - Spikes to 100% of users for 20% of test duration
+  - Reduces back to 10% for remaining 40%
+  
+  **Example**:
+  ```bash
+  chainbench start eth_blockNumber \
+    --shape spike \
+    --users 100 \
+    --test-time 30m \
+    --target https://node-url
+  ```
+  
+  Timeline:
+  - 0-12min: Ramp to 10 users
+  - 12-18min: Spike to 100 users
+  - 18-30min: Drop back to 10 users
+</ParamField>
+
+<ParamField path="default (ramp-up)" type="shape">
+  When no shape is specified, Chainbench uses a linear ramp-up:
+  
+  - Load increases at `--spawn-rate` until `--users` is reached
+  - Maintains constant load for remaining test duration
+  
+  **Example**:
+  ```bash
+  chainbench start eth_blockNumber \
+    --users 100 \
+    --spawn-rate 10 \
+    --test-time 30m \
+    --target https://node-url
+  ```
+  
+  Timeline:
+  - 0-10s: Ramp from 0 to 100 users (10 users/second)
+  - 10s-30min: Maintain 100 users
+</ParamField>
+
+#### Custom Shapes
+
+You can create custom shapes by:
+
+1. Copying an existing shape from `chainbench/shapes`
+2. Modifying the load pattern logic
+3. Placing it in the shapes directory
+4. Referencing it with `--shape your-shape-name`
+
+---
+
+### chainbench list clients
+
+Lists all available client types for endpoint discovery.
+
+```bash
+chainbench list clients
+```
+
+#### Example Output
+
+```bash
+$ chainbench list clients
+
+eth: Ethereum JSON-RPC Specification
+geth: Geth v1.13.x
+erigon: Erigon v2.56.x
+nethermind: Nethermind v1.25.x
+bsc: Binance Smart Chain
+arbitrum: Arbitrum Nitro
+optimism: Optimism Bedrock
+polygon: Polygon PoS
+```
+
+#### Usage with discover
+
+Use client names with the `discover` command:
+
+```bash
+# Discover using single client
+chainbench discover https://node.example.com --clients geth
+
+# Discover using multiple clients
+chainbench discover https://node.example.com --clients geth,erigon
+
+# Discover using chain-specific methods
+chainbench discover https://bsc-node.example.com --clients eth,bsc
+```
+
+#### Client Types
+
+<ParamField path="eth" type="client">
+  Standard Ethereum JSON-RPC specification methods. This is the default.
+</ParamField>
+
+<ParamField path="geth" type="client">
+  Geth-specific methods including debug and trace APIs.
+</ParamField>
+
+<ParamField path="erigon" type="client">
+  Erigon-specific methods and optimizations.
+</ParamField>
+
+<ParamField path="nethermind" type="client">
+  Nethermind-specific methods and extensions.
+</ParamField>
+
+<ParamField path="bsc" type="client">
+  Binance Smart Chain specific methods.
+</ParamField>
+
+<ParamField path="arbitrum" type="client">
+  Arbitrum Nitro specific methods.
+</ParamField>
+
+<ParamField path="optimism" type="client">
+  Optimism Bedrock specific methods.
+</ParamField>
+
+<ParamField path="polygon" type="client">
+  Polygon PoS specific methods.
+</ParamField>
+
+<Note>
+  Client definitions and supported methods are maintained in `chainbench/tools/discovery/clients.json` and `methods.json`.
+</Note>
+
+## Common Workflows
+
+### Exploring Available Options
+
+```bash
+# See what methods you can test
+chainbench list methods
+
+# See what profiles are available
+chainbench list profiles
+
+# Check load pattern options
+chainbench list shapes
+
+# View client types for discovery
+chainbench list clients
+```
+
+### Planning a Test
+
+```bash
+# 1. Discover what the endpoint supports
+chainbench discover https://node.example.com --clients geth
+
+# 2. Check available profiles
+chainbench list profiles
+
+# 3. Review load shapes
+chainbench list shapes
+
+# 4. Run the test
+chainbench start --profile ethereum.general \
+  --shape step \
+  --target https://node.example.com \
+  ...
+```
+
+### Working with Custom Profiles
+
+```bash
+# List your custom profiles
+chainbench list profiles -d ~/custom-profiles
+
+# Verify methods used in profile
+chainbench list methods | grep eth_
+
+# Test custom profile
+chainbench start \
+  --profile-dir ~/custom-profiles \
+  --profile my-test \
+  --target https://node.example.com \
+  ...
+```
+
+## Related Commands
+
+- [chainbench start](/commands/start) - Start a load test using methods, profiles, or shapes
+- [chainbench discover](/commands/discover) - Discover available methods on an endpoint

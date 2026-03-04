@@ -1,0 +1,374 @@
+---
+title: Starknet
+description: Load test Starknet RPC nodes with wallet and contract interaction profiles
+---
+
+Chainbench provides support for testing Starknet RPC nodes with profiles simulating wallet and contract interactions.
+
+## Overview
+
+Starknet testing in Chainbench includes:
+- **Wallet Operations**: Profile based on typical wallet usage patterns
+- **Contract Interactions**: Testing contract calls and queries
+- **Transaction Simulation**: Fee estimation and transaction simulation
+- **Account Operations**: Balance, nonce, and class queries
+- **Partial Support**: Core RPC methods with ongoing expansion
+
+<Note>
+Starknet support in Chainbench is currently partial and focuses on the most commonly used RPC methods. Additional methods will be added in future releases.
+</Note>
+
+## Available Profiles
+
+### starknet.wallet
+
+The wallet profile simulates typical Starknet wallet usage based on real-world patterns.
+
+<CodeGroup>
+```python Method Distribution
+rpc_calls = {
+    StarkNetUser.call_task: 435,
+    StarkNetUser.chain_id_task: 200,
+    StarkNetUser.get_class_hash_at_task: 133,
+    StarkNetUser.get_transaction_receipt_task: 21,
+    StarkNetUser.get_class_at_task: 3,
+    StarkNetUser.get_nonce_task: 3,
+    StarkNetUser.simulate_transaction_task: 2,
+    StarkNetUser.estimate_fee_task: 1,
+}
+```
+</CodeGroup>
+
+**Wait time**: 1 second between requests (using `constant_pacing(1)`)
+
+## Supported RPC Methods
+
+<Tabs>
+  <Tab title="Contract Methods">
+    - `starknet_call` - Execute contract function call (read-only)
+    - `starknet_getClassAt` - Get contract class at address
+    - `starknet_getClassHashAt` - Get class hash for contract address
+  </Tab>
+  <Tab title="Transaction Methods">
+    - `starknet_getTransactionReceipt` - Get transaction receipt
+    - `starknet_simulateTransaction` - Simulate transaction execution
+    - `starknet_estimateFee` - Estimate transaction fee
+  </Tab>
+  <Tab title="Account Methods">
+    - `starknet_getNonce` - Get account nonce
+  </Tab>
+  <Tab title="Network Methods">
+    - `starknet_chainId` - Get Starknet chain ID
+  </Tab>
+</Tabs>
+
+## Example Commands
+
+### Wallet Profile Testing
+
+<CodeGroup>
+```bash Basic Test
+chainbench start --profile starknet.wallet \
+  --users 30 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://starknet-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash High Load Test
+chainbench start --profile starknet.wallet \
+  --users 100 \
+  --spawn-rate 10 \
+  --workers 4 \
+  --test-time 2h \
+  --target https://starknet-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash With Latest Blocks
+chainbench start --profile starknet.wallet \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://starknet-node-url \
+  --use-latest-blocks \
+  --size S \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Single Method Testing
+
+<CodeGroup>
+```bash Test starknet_call
+chainbench start starknet_call \
+  --users 50 \
+  --workers 2 \
+  --test-time 30m \
+  --target https://starknet-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash Test starknet_chainId
+chainbench start starknet_chainId \
+  --users 20 \
+  --workers 2 \
+  --test-time 15m \
+  --target https://starknet-node-url \
+  --headless \
+  --autoquit
+```
+
+```bash List Available Methods
+chainbench list methods
+```
+</CodeGroup>
+
+## Starknet-Specific Features
+
+### RPC Version Support
+
+Some methods use specific RPC versions:
+
+<CodeGroup>
+```python simulateTransaction Example
+# Uses /rpc/v0.3 endpoint
+self.make_rpc_call(
+    name="simulate_transaction",
+    method="starknet_simulateTransaction",
+    params=self._simulate_transaction_params_factory(rng),
+    path="/rpc/v0.3",
+)
+```
+</CodeGroup>
+
+### Contract Call Testing
+
+The `starknet_call` method tests contract function execution:
+
+<CodeGroup>
+```python Call Parameters
+params = {
+    "request": {
+        "contract_address": "0x10884171baf1914edc28d7afb619b40a4051cfae78a094a55d230f19e944a28",
+        "entry_point_selector": "0x279193ae67f7ef3a6be330f5bd004266a0ec3fd5a6f7d2fe71a2096b3101578",
+        "calldata": [hex(random_value)],
+    },
+    "block_id": "latest",
+}
+```
+</CodeGroup>
+
+### Transaction Simulation
+
+Test transaction simulation and fee estimation:
+
+<CodeGroup>
+```python Simulate Transaction
+params = [
+    {"block_number": block_number},
+    [
+        {
+            "type": "INVOKE",
+            "max_fee": "0x0",
+            "version": "0x100000000000000000000000000000001",
+            "signature": [signature_values],
+            "nonce": "0x16",
+            "sender_address": sender_address,
+            "calldata": calldata_array,
+        }
+    ],
+    ["SKIP_VALIDATE"],
+]
+```
+</CodeGroup>
+
+### Test Data Generation
+
+Chainbench automatically fetches Starknet-specific data:
+- **Contract Addresses**: For class and call operations
+- **Transaction Hashes**: For receipt queries
+- **Account Addresses**: For nonce and balance operations
+- **Class Hashes**: For contract verification
+
+## Network Testing
+
+### Starknet Mainnet
+
+<CodeGroup>
+```bash Mainnet Test
+chainbench start --profile starknet.wallet \
+  --users 50 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://starknet-mainnet.public.blastapi.io \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Starknet Sepolia (Testnet)
+
+<CodeGroup>
+```bash Testnet Test
+chainbench start --profile starknet.wallet \
+  --users 20 \
+  --workers 1 \
+  --test-time 30m \
+  --target https://starknet-sepolia.public.blastapi.io \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Custom Starknet Node
+
+<CodeGroup>
+```bash Private Node
+chainbench start --profile starknet.wallet \
+  --users 30 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://your-starknet-node-url \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+## Advanced Usage
+
+### Custom Block Range
+
+<CodeGroup>
+```bash Specific Block Range
+chainbench start --profile starknet.wallet \
+  --users 30 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://starknet-node-url \
+  --start-block 100000 \
+  --end-block 110000 \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Reference Node Testing
+
+<CodeGroup>
+```bash Use Reference Node
+chainbench start --profile starknet.wallet \
+  --users 30 \
+  --workers 2 \
+  --test-time 1h \
+  --target https://node-under-test \
+  --ref-url https://reference-starknet-node \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+### Test Data Sizes
+
+<CodeGroup>
+```bash Small Dataset (XS)
+chainbench start --profile starknet.wallet \
+  --users 10 \
+  --workers 1 \
+  --test-time 30m \
+  --target https://starknet-node-url \
+  --size XS \
+  --headless \
+  --autoquit
+```
+
+```bash Large Dataset (L)
+chainbench start --profile starknet.wallet \
+  --users 50 \
+  --workers 4 \
+  --test-time 2h \
+  --target https://starknet-node-url \
+  --size L \
+  --headless \
+  --autoquit
+```
+</CodeGroup>
+
+## Performance Considerations
+
+### Recommended Settings
+
+**Full Nodes**:
+- Users: 30-100 concurrent users
+- Spawn Rate: 5-20 users/second
+- Workers: 2-4
+- Test Data Size: S or M
+
+**Contract Call Heavy Testing**:
+- Users: 50-150 concurrent users
+- Spawn Rate: 10-30 users/second
+- Workers: 2-4
+- Test Data Size: M or L
+
+**Fee Estimation Testing**:
+- Users: 10-30 concurrent users (estimation is resource-intensive)
+- Spawn Rate: 2-10 users/second
+- Workers: 1-2
+- Test Data Size: S
+
+### Method Performance Notes
+
+<Note>
+**Heavy Methods**: `starknet_call`, `starknet_simulateTransaction`, and `starknet_estimateFee` are more resource-intensive than simple queries like `starknet_chainId`.
+</Note>
+
+<Note>
+**Class Queries**: `starknet_getClassAt` and `starknet_getClassHashAt` may return large responses depending on contract size.
+</Note>
+
+## Usage Patterns
+
+The wallet profile reflects real-world Starknet usage:
+
+**Most Common Operations** (54%):
+- Contract calls for reading state
+- Querying token balances
+- Reading NFT metadata
+
+**Network Queries** (25%):
+- Chain ID verification
+- Network validation
+
+**Contract Verification** (17%):
+- Checking contract classes
+- Validating deployments
+
+**Transaction Operations** (4%):
+- Receipt queries
+- Fee estimation
+- Transaction simulation
+
+## Limitations
+
+<Note>
+Starknet support is currently partial. The following features are not yet implemented:
+- Block queries (`starknet_getBlockWithTxHashes`, `starknet_getBlockWithTxs`)
+- State queries (`starknet_getStateUpdate`, `starknet_getStorageAt`)
+- Event filtering (`starknet_getEvents`)
+- Transaction submission (`starknet_addInvokeTransaction`, etc.)
+- Trace methods (`starknet_traceTransaction`, `starknet_traceBlockTransactions`)
+</Note>
+
+These methods will be added in future releases based on community feedback and usage requirements.
+
+## Related Resources
+
+- [Starknet RPC API Documentation](https://docs.starknet.io/documentation/architecture_and_concepts/Network_Architecture/starknet-rpc-api/)
+- [Chainstack Starknet Documentation](https://docs.chainstack.com/docs/starknet)
+- [Creating Custom Profiles](/guides/custom-profiles)
+- [Starknet Developer Portal](https://www.starknet.io/developers/)
