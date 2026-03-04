@@ -1,0 +1,130 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Chainbench",
+  "projectDescription": "Flexible blockchain infrastructure benchmarking and load testing tool built on Locust",
+  "theme": "aspen",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/profiles",
+              "concepts/test-data",
+              "concepts/load-shapes",
+              "concepts/monitors"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/running-tests",
+              "guides/headless-mode",
+              "guides/web-ui-mode",
+              "guides/custom-profiles",
+              "guides/batch-requests",
+              "guides/latest-blocks"
+            ]
+          },
+          {
+            "group": "Supported Blockchains",
+            "pages": [
+              "blockchains/ethereum",
+              "blockchains/evm",
+              "blockchains/solana",
+              "blockchains/starknet"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Command Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "commands/start",
+              "commands/discover",
+              "commands/list"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/parameters",
+              "configuration/profiles",
+              "configuration/load-shapes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Advanced Usage",
+            "pages": [
+              "advanced/method-discovery",
+              "advanced/timescale-integration",
+              "advanced/notifications",
+              "advanced/troubleshooting"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/contributing",
+              "development/architecture"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Built-in profiles for 14+ blockchains including Ethereum, BSC, Polygon, Solana, and more",
+    "Dynamic call parameter generation using real chain data",
+    "Headless and web UI modes for flexible testing",
+    "Customizable load patterns (ramp-up, step, spike)",
+    "Support for batch requests and method discovery",
+    "Real-time monitoring with sync-lag-monitor and other monitors",
+    "Custom profile creation for any EVM-compatible blockchain",
+    "Test data size configuration (XS to XL) with latest blocks support"
+  ],
+  "publicApiSurface": [
+    "chainbench start - Start a load test",
+    "chainbench discover - Discover available RPC methods",
+    "chainbench list methods - List all supported methods",
+    "chainbench list profiles - List available profiles",
+    "chainbench list shapes - List load pattern shapes",
+    "chainbench list clients - List client options for discovery",
+    "--profile - Specify profile to test",
+    "--users - Set number of simulated users",
+    "--workers - Set number of worker threads",
+    "--test-time - Set test duration",
+    "--target - Specify blockchain node URL",
+    "--headless - Run in headless mode",
+    "--autoquit - Auto quit after test completion",
+    "--shape - Specify load pattern shape",
+    "--batch - Enable batch request mode",
+    "--use-latest-blocks - Use latest blocks for test data",
+    "--size - Set test data size (XS/S/M/L/XL)",
+    "--monitor - Add monitoring processes",
+    "--ref-url - Reference node for test data generation",
+    "EvmUser - Base class for EVM blockchain profiles",
+    "SolanaUser - Base class for Solana profiles"
+  ]
+}
