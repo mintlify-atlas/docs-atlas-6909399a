@@ -1,0 +1,290 @@
+---
+title: Quickstart
+description: Get started with Chainbench in minutes and run your first blockchain infrastructure load test
+---
+
+This quickstart guide will help you run your first load test with Chainbench. You'll learn how to test individual RPC methods and use pre-configured profiles.
+
+<Note>
+You'll need a blockchain RPC endpoint URL to test. You can use a public endpoint or provision one from [Chainstack](https://chainstack.com/).
+</Note>
+
+## Your first benchmark
+
+<Steps>
+  <Step title="Choose your testing approach">
+    Chainbench offers two ways to run load tests:
+    
+    - **Single method testing** - Test a specific RPC method like `eth_blockNumber`
+    - **Profile-based testing** - Use pre-configured profiles with multiple weighted methods
+    
+    For this quickstart, we'll start with a single method test.
+  </Step>
+  
+  <Step title="Run your first test">
+    Test the `eth_blockNumber` method with a quick 1-minute load test:
+    
+    ```bash
+    chainbench start eth_blockNumber \
+      --users 50 \
+      --workers 2 \
+      --test-time 1m \
+      --target https://your-node-url \
+      --headless \
+      --autoquit
+    ```
+    
+    This command:
+    - Tests the `eth_blockNumber` method
+    - Simulates 50 concurrent users
+    - Uses 2 worker processes
+    - Runs for 1 minute
+    - Operates in headless mode (no web UI)
+    - Automatically quits when finished
+    
+    <Note>
+    Replace `https://your-node-url` with your actual blockchain node endpoint URL.
+    </Note>
+  </Step>
+  
+  <Step title="Review the results">
+    After the test completes, results are saved to the `./results` directory:
+    
+    ```
+    results/
+    └── eth_blockNumber/
+        └── 2024-03-04_10-30-15/
+            ├── stats.csv           # Request/response statistics
+            ├── stats_history.csv   # Time-series metrics
+            ├── failures.csv        # Failed requests
+            └── exceptions.csv      # Exception details
+    ```
+    
+    Key metrics include:
+    - Request rates (requests per second)
+    - Response times (min, max, median, 95th percentile)
+    - Failure rates and error types
+    - Time-series data for visualization
+  </Step>
+  
+  <Step title="Try web UI mode (optional)">
+    For real-time monitoring, run without the `--headless` flag:
+    
+    ```bash
+    chainbench start eth_blockNumber \
+      --users 50 \
+      --workers 2 \
+      --target https://your-node-url
+    ```
+    
+    Open your browser to `http://localhost:8089` and you'll see the Locust web interface where you can:
+    - Start/stop tests manually
+    - Adjust user count in real-time
+    - View live charts and statistics
+    - Download results in various formats
+  </Step>
+</Steps>
+
+## Understanding test parameters
+
+### Essential Parameters
+
+<ParamField path="--target" type="string" required>
+  The blockchain node RPC endpoint URL to test.
+  
+  Example: `https://ethereum-mainnet-rpc.allthatnode.com`
+</ParamField>
+
+<ParamField path="--users" type="integer" default="100">
+  Number of concurrent simulated users making requests.
+</ParamField>
+
+<ParamField path="--workers" type="integer" default="8">
+  Number of worker processes to distribute the load.
+</ParamField>
+
+<ParamField path="--test-time" type="string" default="5m">
+  Duration of the test. Accepts formats like `30s`, `5m`, `1h`, `12h`.
+</ParamField>
+
+### Mode Flags
+
+<ParamField path="--headless" type="boolean">
+  Run without the web UI for automated/remote testing.
+</ParamField>
+
+<ParamField path="--autoquit" type="boolean">
+  Automatically exit when the test completes (useful with `--headless`).
+</ParamField>
+
+## Exploring profiles
+
+Instead of testing single methods, use pre-configured profiles that test multiple methods with realistic weights:
+
+<Tabs>
+  <Tab title="Ethereum">
+    ```bash
+    chainbench start --profile ethereum.general \
+      --users 100 \
+      --workers 4 \
+      --test-time 1m \
+      --target https://eth-node-url \
+      --headless \
+      --autoquit
+    ```
+  </Tab>
+  
+  <Tab title="BSC">
+    ```bash
+    chainbench start --profile bsc.general \
+      --users 100 \
+      --workers 4 \
+      --test-time 1m \
+      --target https://bsc-node-url \
+      --headless \
+      --autoquit
+    ```
+  </Tab>
+  
+  <Tab title="Polygon">
+    ```bash
+    chainbench start --profile polygon.general \
+      --users 100 \
+      --workers 4 \
+      --test-time 1m \
+      --target https://polygon-node-url \
+      --headless \
+      --autoquit
+    ```
+  </Tab>
+  
+  <Tab title="Generic EVM">
+    ```bash
+    chainbench start --profile evm.light \
+      --users 100 \
+      --workers 4 \
+      --test-time 1m \
+      --target https://any-evm-node-url \
+      --headless \
+      --autoquit
+    ```
+  </Tab>
+</Tabs>
+
+## Testing single methods
+
+List all available RPC methods:
+
+```bash
+chainbench list methods
+```
+
+Test any specific method:
+
+```bash
+chainbench start eth_getBalance \
+  --users 25 \
+  --test-time 30s \
+  --target https://your-node-url \
+  --headless \
+  --autoquit
+```
+
+## Common use cases
+
+### Testing nodes with limited history
+
+For nodes running in snap sync or other modes with limited block history:
+
+```bash
+chainbench start --profile ethereum.general \
+  --users 50 \
+  --test-time 1h \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --use-latest-blocks \
+  --size S
+```
+
+The `--use-latest-blocks` flag ensures test data uses only recent blocks that the node has available.
+
+### Batch request testing
+
+Test how your node handles batch JSON-RPC requests:
+
+```bash
+chainbench start --profile evm.light \
+  --users 50 \
+  --test-time 5m \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --batch \
+  --batch-size 10
+```
+
+### Discovering supported methods
+
+Before testing, discover which methods your endpoint supports:
+
+```bash
+chainbench discover https://your-node-url --clients geth,erigon
+```
+
+### Running on a remote server
+
+For long-running tests on remote servers, use `nohup`:
+
+```bash
+nohup chainbench start --profile ethereum.general \
+  --users 100 \
+  --workers 4 \
+  --test-time 12h \
+  --target https://node-url \
+  --headless \
+  --autoquit &
+```
+
+Results will be saved to the results directory even if you disconnect.
+
+## Test data sizes
+
+Chainbench generates test data by fetching real blockchain data. The `--size` flag controls how many blocks are used:
+
+| Size | Blocks  | Use Case |
+|------|---------|----------|
+| XS   | 10      | Quick tests, development |
+| S    | 100     | Default, general testing |
+| M    | 1,000   | Extended testing |
+| L    | 10,000  | Long-running tests |
+| XL   | 100,000 | Comprehensive stress tests |
+
+Example with custom size:
+
+```bash
+chainbench start eth_blockNumber \
+  --users 50 \
+  --test-time 5m \
+  --target https://node-url \
+  --headless \
+  --autoquit \
+  --size XS
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Core concepts" icon="brain" href="/concepts/profiles">
+    Learn about profiles, test data, and load patterns
+  </Card>
+  <Card title="Running tests" icon="play" href="/guides/running-tests">
+    Detailed guide on running and configuring tests
+  </Card>
+  <Card title="Command reference" icon="terminal" href="/commands/start">
+    Complete reference for all commands and options
+  </Card>
+  <Card title="Custom profiles" icon="code" href="/guides/custom-profiles">
+    Create custom profiles for your specific needs
+  </Card>
+</CardGroup>
